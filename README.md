@@ -13,6 +13,17 @@ By combining live weather data, a calculated Weather Risk Index (WRI), interacti
 
 ---
 
+
+## 🔴 Live Demo
+
+🚀 **Explore CascadeAI India live!**
+
+Experience the interactive climate-risk intelligence dashboard, explore weather conditions across 57 Indian city nodes, view risk visualisations, discover national rankings, and interact with Mitra AI.
+
+🌐 **[Launch CascadeAI India — Live Website](https://kailai666.github.io/Cascade-Ai/)**
+
+---
+
 ## 🌱 About the Project
 
 Climate conditions can vary significantly across cities and regions. Understanding these changes requires more than checking individual weather forecasts.
