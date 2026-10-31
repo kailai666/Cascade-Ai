@@ -1,0 +1,1830 @@
+<!DOCTYPE html>
+<!-- CascadeAI India build 11.5-GH3 (GitHub stable multi-provider build).
+     HF1: restored missing nearestHourlyIndex() — packets were silently discarded.
+     HF2: batched live sync — 57 cities now cost 3 requests instead of 57, plus
+     429-aware backoff, fixing Open-Meteo rate limiting (HTTP 429) on shared IPs.
+     Check the footer: it must read "BUILD 11.5-GH3". If it does not, you are
+     running an OLD file — re-download/re-upload this exact file. -->
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1.0"/>
+<title>CascadeAI India v11 — National Climate-Risk Intelligence Network</title>
+<meta name="description" content="CascadeAI India turns live weather into national risk intelligence: 57 city nodes, calculated Weather Risk Index, modelled cascade network, live routing and the Mitra voice assistant."/>
+<link rel="preconnect" href="https://api.open-meteo.com"/>
+<link rel="preconnect" href="https://wttr.in"/>
+<link rel="preconnect" href="https://unpkg.com"/>
+<link rel="preconnect" href="https://router.project-osrm.org"/>
+<link rel="preconnect" href="https://fonts.googleapis.com"/>
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin/>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&family=JetBrains+Mono:wght@500;700&display=swap"/>
+<style>
+/* ============================================================
+   CascadeAI India v11 — design system
+   Palette: dark navy / deep teal / cyan; risk bands reserved for meaning
+   ============================================================ */
+:root{
+  --bg:#030d12; --bg2:#06161d; --panel:rgba(14,36,45,.72); --panel2:rgba(8,24,31,.9);
+  --line:rgba(118,206,218,.14); --line2:rgba(118,206,218,.3);
+  --text:#e9fbff; --muted:#8fb2bb; --dim:#5e828b;
+  --cyan:#2fe6c8; --blue:#4fa8ff; --green:#3ddc84; --yellow:#ffd257; --orange:#ff9b45; --red:#ff5b69;
+  --glow:0 0 22px rgba(47,230,200,.18);
+  --r:18px; --r-sm:12px;
+  --sans:'Inter',ui-sans-serif,system-ui,-apple-system,'Segoe UI',Roboto,Arial,sans-serif;
+  --mono:'JetBrains Mono',ui-monospace,Consolas,monospace;
+  --shadow:0 18px 50px rgba(0,0,0,.4);
+}
+*{box-sizing:border-box}
+html{scroll-behavior:smooth}
+body{margin:0;min-height:100vh;color:var(--text);font-family:var(--sans);font-size:15px;line-height:1.5;
+  background:radial-gradient(1100px 520px at 50% -8%,rgba(47,230,200,.12),transparent 60%),
+             radial-gradient(900px 480px at 100% 42%,rgba(79,168,255,.07),transparent 55%),
+             radial-gradient(800px 460px at 0% 80%,rgba(47,230,200,.05),transparent 55%),var(--bg);
+  overflow-x:hidden;-webkit-font-smoothing:antialiased}
+button,input,select,textarea{font:inherit;color:inherit}
+button{cursor:pointer}
+:focus-visible{outline:2px solid var(--cyan);outline-offset:2px;border-radius:6px}
+.hidden{display:none!important}
+.mono{font-family:var(--mono)}
+::selection{background:rgba(47,230,200,.3)}
+::-webkit-scrollbar{width:9px;height:9px}
+::-webkit-scrollbar-thumb{background:#16414c;border-radius:9px}
+::-webkit-scrollbar-track{background:transparent}
+
+/* ---------- Topbar ---------- */
+.topbar{position:sticky;top:0;z-index:400;height:66px;display:flex;align-items:center;justify-content:space-between;gap:14px;
+  padding:0 22px;background:rgba(3,13,18,.82);backdrop-filter:blur(16px);border-bottom:1px solid var(--line)}
+.brand{display:flex;align-items:center;gap:12px;min-width:0}
+.brandmark{width:40px;height:40px;flex:0 0 40px;border-radius:13px;display:grid;place-items:center;font-size:21px;color:#052a2b;
+  background:conic-gradient(from 40deg,#4df4d7,#3ca6ff,#2ad7ca,#4df4d7);box-shadow:var(--glow)}
+.brandtext{line-height:1.15;white-space:nowrap}
+.brandtext strong{font-size:17px;font-weight:900;letter-spacing:-.3px}
+.brandtext strong em{font-style:normal;background:linear-gradient(90deg,#55f5db,#59b7ff);-webkit-background-clip:text;background-clip:text;color:transparent}
+.brandtext small{display:block;color:var(--muted);font-size:9.5px;letter-spacing:1.6px;text-transform:uppercase}
+.statusline{display:flex;align-items:center;gap:9px;flex-wrap:wrap;justify-content:flex-end}
+.pill{display:inline-flex;align-items:center;gap:7px;border:1px solid var(--line);background:var(--panel2);border-radius:999px;
+  padding:7px 12px;color:var(--muted);font-size:11.5px;white-space:nowrap;max-width:100%}
+.pill .dot{width:8px;height:8px;flex:0 0 8px;border-radius:50%;background:var(--green);box-shadow:0 0 10px var(--green);transition:background .2s}
+.pill .dot.busy{background:var(--yellow);box-shadow:0 0 10px var(--yellow);animation:blink 1s infinite}
+.pill .dot.stale{background:var(--orange);box-shadow:0 0 10px var(--orange)}
+@keyframes blink{50%{opacity:.35}}
+.citypill{transition:border-color .18s}
+.citypill:hover{border-color:var(--cyan);color:var(--text)}
+.countdown{font-family:var(--mono);font-size:11px}
+
+/* ---------- Buttons ---------- */
+.btn{display:inline-flex;align-items:center;justify-content:center;gap:8px;border:1px solid var(--line2);background:#0a222b;color:var(--text);
+  padding:9px 14px;border-radius:var(--r-sm);font-size:13px;font-weight:600;transition:transform .15s,border-color .15s,box-shadow .15s,background .15s}
+.btn:hover{border-color:var(--cyan);transform:translateY(-1px);box-shadow:0 6px 18px rgba(0,0,0,.25)}
+.btn:active{transform:translateY(0)}
+.btn:disabled{opacity:.45;cursor:not-allowed;transform:none;box-shadow:none}
+.btn.primary{border:0;background:linear-gradient(90deg,#17b9a4,#257fc8);font-weight:800;box-shadow:0 6px 20px rgba(23,185,164,.22)}
+.btn.primary:hover{box-shadow:0 8px 24px rgba(23,185,164,.32)}
+.btn.busy{opacity:.65;pointer-events:none}
+.btn .spin{display:inline-block;animation:rot 1s linear infinite}
+@keyframes rot{to{transform:rotate(360deg)}}
+.btn.icon{padding:9px 11px}
+
+/* ---------- Home / Mitra Core ---------- */
+.hero{text-align:center;max-width:920px;margin:34px auto 10px;padding:0 20px}
+.kicker{font-size:10.5px;letter-spacing:2.4px;color:var(--cyan);text-transform:uppercase;margin:0 0 10px;font-weight:700}
+.hero h1{font-size:clamp(28px,3.6vw,50px);letter-spacing:-1.8px;line-height:1.08;margin:0 0 12px}
+.hero h1 span{background:linear-gradient(90deg,#55f5db,#59b7ff);-webkit-background-clip:text;background-clip:text;color:transparent}
+.lede{color:var(--muted);max-width:760px;margin:0 auto;font-size:15px;line-height:1.65}
+.lede b{color:var(--text)}
+.orbit{position:relative;max-width:1170px;aspect-ratio:1170/660;min-height:560px;margin:16px auto 0;border-radius:32px;overflow:hidden;
+  border:1px solid var(--line);
+  background:radial-gradient(circle at 50% 46%,rgba(47,230,200,.1),transparent 26%),
+             linear-gradient(150deg,rgba(12,37,45,.8),rgba(4,17,22,.95));
+  box-shadow:var(--shadow)}
+.orbit:before{content:"";position:absolute;inset:0;background-image:linear-gradient(rgba(112,193,204,.04) 1px,transparent 1px),
+  linear-gradient(90deg,rgba(112,193,204,.04) 1px,transparent 1px);background-size:36px 36px;
+  -webkit-mask-image:radial-gradient(circle,#000 30%,transparent 82%);mask-image:radial-gradient(circle,#000 30%,transparent 82%)}
+.wires{position:absolute;inset:0;width:100%;height:100%}
+.wires line{stroke:#27929a;stroke-width:1.3;stroke-dasharray:6 11;opacity:.42;animation:dashflow 9s linear infinite}
+@keyframes dashflow{to{stroke-dashoffset:-170}}
+.core{position:absolute;left:50%;top:47%;transform:translate(-50%,-50%);width:262px;height:262px;border-radius:50%;display:grid;place-items:center;
+  background:radial-gradient(circle,rgba(58,235,210,.17),rgba(7,28,35,.97) 62%);border:1px solid rgba(79,240,218,.35);
+  box-shadow:0 0 0 22px rgba(52,242,208,.03),0 0 90px rgba(40,211,190,.17);z-index:4}
+.core:before{content:"";position:absolute;inset:-16px;border:1px dashed rgba(89,236,218,.28);border-radius:50%;animation:spin 26s linear infinite}
+@keyframes spin{to{transform:rotate(360deg)}}
+.robot{width:150px;height:150px;filter:drop-shadow(0 14px 22px rgba(0,0,0,.4))}
+.corelabel{position:absolute;bottom:20px;text-align:center;width:100%}
+.corelabel b{display:block;letter-spacing:2.6px;font-size:12px}
+.corelabel small{color:var(--muted);font-size:10px}
+.node{position:absolute;transform:translate(-50%,-50%);width:158px;min-height:108px;padding:12px 10px;border:1px solid rgba(107,219,222,.18);
+  border-radius:20px;background:linear-gradient(150deg,rgba(15,44,53,.95),rgba(7,24,30,.95));color:var(--text);z-index:6;
+  display:flex;flex-direction:column;align-items:center;justify-content:center;gap:6px;text-align:center;
+  box-shadow:0 12px 30px rgba(0,0,0,.3);transition:transform .18s,border-color .18s,box-shadow .18s}
+.node:hover{transform:translate(-50%,-50%) scale(1.05);border-color:var(--cyan);box-shadow:0 0 0 1px rgba(47,230,200,.2),0 14px 36px rgba(0,0,0,.4),var(--glow)}
+.node .nicon{font-size:26px;line-height:1;filter:drop-shadow(0 4px 10px rgba(0,0,0,.4))}
+.node b{font-size:12.5px;letter-spacing:.1px}
+.node small{font-size:9px;color:var(--muted);letter-spacing:.6px;text-transform:uppercase}
+.node .live{position:absolute;right:10px;top:10px;width:7px;height:7px;border-radius:50%;background:var(--green);box-shadow:0 0 9px var(--green)}
+.n1{left:50%;top:8%}.n2{left:80%;top:17%}.n3{left:91.5%;top:47%}.n4{left:79%;top:80%}
+.n5{left:21%;top:80%}.n6{left:8.5%;top:47%}.n7{left:20%;top:17%}
+.floats{display:contents}
+.fm{position:absolute;z-index:7;pointer-events:none;min-width:128px;padding:10px 13px;border:1px solid rgba(107,219,222,.14);border-radius:14px;
+  background:rgba(4,19,24,.92);font-size:9px;color:var(--muted);letter-spacing:1px}
+.fm strong{display:block;color:var(--text);font-size:19px;margin:3px 0 2px;font-family:var(--mono)}
+.fm span{display:block;color:var(--dim);font-size:9.5px;letter-spacing:.4px;text-transform:none}
+.fm1{left:calc(50% - 306px);top:40%}.fm2{left:calc(50% + 172px);top:40%}.fm3{left:50%;top:77%;transform:translateX(-50%);text-align:center}
+
+/* National pulse strip + policy */
+.pulse{max-width:1170px;margin:16px auto 0;display:grid;grid-template-columns:repeat(4,1fr);gap:12px;padding:0 0}
+.pblock{border:1px solid var(--line);border-radius:var(--r);background:var(--panel);padding:14px 16px}
+.pblock small{font-size:9.5px;letter-spacing:1.4px;color:var(--muted);text-transform:uppercase}
+.pblock strong{display:block;font-size:20px;margin-top:5px;font-weight:800;letter-spacing:-.3px}
+.pblock span{display:block;font-size:11px;color:var(--dim);margin-top:2px}
+.policy{max-width:1170px;margin:16px auto 34px;padding:14px 16px;border-left:3px solid var(--cyan);border-radius:12px;
+  background:rgba(10,34,41,.6);color:#8fb6be;font-size:11.5px;line-height:1.7}
+.ptags{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:9px}
+.ptag{border:1px solid var(--line);border-radius:999px;padding:4px 10px;font-size:9.5px;letter-spacing:.8px;color:#9fd3da;background:rgba(6,22,28,.8)}
+.ptag b{color:var(--cyan);font-weight:800}
+
+/* ---------- Feature shell ---------- */
+.feature-view{padding:22px 22px 44px;min-height:calc(100vh - 66px)}
+.fshell{max-width:1480px;margin:0 auto}
+.fhead{display:flex;justify-content:space-between;align-items:flex-start;gap:16px;margin-bottom:16px}
+.fhead h2{font-size:27px;margin:0 0 5px;letter-spacing:-.8px}
+.fhead p{margin:0;color:var(--muted);font-size:13px;line-height:1.55;max-width:860px}
+.tags{display:flex;gap:7px;flex-wrap:wrap;margin-top:9px}
+.tag{border:1px solid var(--line);border-radius:999px;padding:3.5px 9px;font-size:9px;letter-spacing:.8px;color:#93c6cd;background:rgba(6,22,28,.75)}
+.tag b{font-weight:800}
+.tag.live b{color:var(--green)}.tag.calc b{color:var(--yellow)}.tag.model b{color:#c9a4ff}.tag.map b{color:var(--blue)}
+
+/* ---------- Cards & grids ---------- */
+.card{padding:16px 18px;border-radius:var(--r);border:1px solid var(--line);background:linear-gradient(155deg,rgba(15,39,48,.85),rgba(7,23,29,.94));
+  box-shadow:0 10px 30px rgba(0,0,0,.22)}
+.card h3{margin:0 0 10px;font-size:13.5px;letter-spacing:.2px}
+.card h3 small{color:var(--dim);font-weight:500}
+.sub{font-size:12px;color:var(--muted);line-height:1.6}
+.label{font-size:9.5px;text-transform:uppercase;letter-spacing:1.2px;color:var(--muted)}
+.big{font-size:34px;font-weight:900;margin:4px 0 2px;letter-spacing:-1px}
+.big small{font-size:15px;color:var(--muted);font-weight:600}
+.grid{display:grid;gap:14px}
+.g2{grid-template-columns:repeat(2,minmax(0,1fr))}
+.g3{grid-template-columns:repeat(3,minmax(0,1fr))}
+.g4{grid-template-columns:repeat(4,minmax(0,1fr))}
+.mt{margin-top:14px}
+.mrow{display:flex;justify-content:space-between;gap:14px;align-items:center;padding:8px 0;border-bottom:1px solid rgba(255,255,255,.055);font-size:12.5px}
+.mrow:last-child{border-bottom:0}
+.mrow .sub{font-size:12px}
+.src{display:inline-flex;align-items:center;gap:6px;border:1px solid var(--line);border-radius:999px;padding:4px 9px;color:#8db8c1;font-size:9px;letter-spacing:.7px;margin-top:10px}
+.src i{width:6px;height:6px;border-radius:50%;background:var(--green);flex:0 0 6px}
+.src.calc i{background:var(--yellow)}.src.model i{background:#b677ff}.src.map i{background:var(--blue)}
+.badge{display:inline-block;padding:4px 10px;border-radius:999px;font-size:10px;font-weight:900;letter-spacing:.8px}
+.bar{height:8px;border-radius:999px;background:#08171c;overflow:hidden;margin-top:6px}
+.bar span{display:block;height:100%;border-radius:inherit;transition:width .5s}
+.notice,.good,.err{padding:12px 14px;border-radius:14px;border:1px solid rgba(255,210,87,.22);background:rgba(255,210,87,.07);color:#f0d67e;font-size:12px;line-height:1.6}
+.good{border-color:rgba(61,220,132,.25);background:rgba(61,220,132,.07);color:#8ef0b4}
+.err{border-color:rgba(255,91,105,.3);background:rgba(255,91,105,.07);color:#ff9eaa}
+.selbar{display:flex;align-items:flex-end;gap:14px;flex-wrap:wrap;margin-bottom:14px}
+.selbar .field{flex:1 1 260px}
+.flash{animation:flash 1s ease}
+@keyframes flash{0%{box-shadow:0 0 0 1px rgba(47,230,200,.5),0 0 26px rgba(47,230,200,.25)}100%{box-shadow:none}}
+.skel{position:relative;overflow:hidden;background:#0a2129;border-radius:8px;min-height:14px}
+.skel:after{content:"";position:absolute;inset:0;background:linear-gradient(90deg,transparent,rgba(47,230,200,.09),transparent);animation:shimmer 1.4s infinite}
+@keyframes shimmer{to{transform:translateX(100%)}}
+
+/* ---------- Fields ---------- */
+.field{display:flex;flex-direction:column;gap:6px;min-width:0}
+.field label{font-size:9.5px;color:var(--muted);letter-spacing:1px;text-transform:uppercase;font-weight:700}
+.field select,.field input,.chat-input{width:100%;border:1px solid var(--line2);background:#061a20;color:var(--text);border-radius:var(--r-sm);
+  padding:11px 12px;outline:none;transition:border-color .15s;appearance:auto}
+.field select:focus,.field input:focus,.chat-input:focus{border-color:var(--cyan)}
+.row-actions{display:flex;gap:10px;align-items:center;flex-wrap:wrap}
+.seg{display:inline-flex;border:1px solid var(--line2);border-radius:var(--r-sm);overflow:hidden;background:#071d24}
+.seg button{border:0;background:transparent;color:#9bc2ca;padding:8px 13px;font-size:11.5px;font-weight:700;transition:.15s}
+.seg button:hover{color:var(--text)}
+.seg button.on{background:linear-gradient(90deg,#17a99c,#2378bd);color:#fff}
+.chip{display:inline-flex;align-items:center;gap:6px;border:1px solid var(--line);border-radius:999px;padding:5px 11px;font-size:10.5px;color:var(--muted);background:rgba(6,22,28,.7)}
+.chip b{color:var(--text)}
+.lchip{display:inline-flex;align-items:center;gap:6px;font-size:10px;color:var(--muted)}
+.lchip i{width:9px;height:9px;border-radius:50%}
+
+/* ---------- Maps ---------- */
+.mapgrid{grid-template-columns:minmax(0,1.62fr) minmax(330px,.72fr)}
+.mapbox{position:relative;height:clamp(460px,60vh,690px);border-radius:16px;overflow:hidden;border:1px solid var(--line);background:#dfe9ea}
+.map-status{margin-top:9px;font-size:11px;color:var(--muted);min-height:16px}
+.map-loading{position:absolute;inset:0;display:grid;place-items:center;color:#48707a;font-size:12px;z-index:500}
+.citylist{max-height:430px;overflow:auto;padding-right:4px;margin-top:10px}
+.city-item{display:grid;grid-template-columns:14px 1fr auto;gap:10px;align-items:center;width:100%;text-align:left;padding:9px 11px;
+  border:1px solid rgba(255,255,255,.06);border-radius:13px;background:#081b21;margin-bottom:7px;transition:.15s;font-size:12.5px}
+.city-item:hover,.city-item.active{border-color:rgba(47,230,200,.5);background:#0b252d}
+.city-item b{font-weight:700}
+.city-item small{display:block;color:var(--muted);font-size:10.5px}
+.tiny-dot{width:10px;height:10px;border-radius:50%;box-shadow:0 0 9px currentColor}
+.leaflet-container{background:#dfe9ea;font:inherit}
+.leaflet-control-zoom a{background:#0b2027!important;color:#fff!important;border-color:rgba(255,255,255,.12)!important}
+.leaflet-control-attribution{background:rgba(5,20,25,.85)!important;color:#a9c8ce!important;font-size:9px!important}
+.leaflet-control-attribution a{color:#67e9d2!important}
+.leaflet-popup-content-wrapper,.leaflet-popup-tip{background:#081d24!important;color:#eaffff!important;border-radius:12px!important}
+.leaflet-popup-content-wrapper{border:1px solid rgba(140,220,230,.22)!important;box-shadow:0 10px 26px rgba(0,0,0,.4)!important}
+.leaflet-popup-content{margin:11px 14px!important;font-size:12px;line-height:1.55}
+.leaflet-marker-icon.cm-icon{background:transparent!important;border:none!important}
+.cm-icon .pin{width:23px;height:23px;border-radius:50%;background:var(--c,#2fe6c8);border:2.5px solid rgba(255,255,255,.92);
+  box-shadow:0 0 0 3px rgba(3,13,18,.32),0 0 15px var(--c,#2fe6c8);transition:width .18s,height .18s,box-shadow .18s}
+.cm-icon .pin:hover{transform:scale(1.14)}
+.cm-icon.cm-sel .pin{width:31px;height:31px;box-shadow:0 0 0 5px rgba(255,255,255,.92),0 0 26px var(--c)}
+.cm-icon.cm-sel{z-index:999!important}
+.city-label{background:rgba(4,17,22,.88)!important;color:#dff7fa!important;border:1px solid rgba(140,220,230,.25)!important;
+  border-radius:8px!important;box-shadow:none!important;font-size:10px!important;font-weight:700;padding:2px 7px!important}
+.city-label:before{display:none!important}
+.city-label.sel{border-color:var(--cyan)!important;color:#fff!important}
+
+/* ---------- Risk graph ---------- */
+.winbtns{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+.gwrap{position:relative;width:100%}
+.gsvg{width:100%;height:auto;display:block;border-radius:16px;background:linear-gradient(180deg,rgba(9,29,35,.8),rgba(5,18,23,.8));border:1px solid var(--line)}
+.gtip{position:absolute;pointer-events:none;background:#071e26;border:1px solid rgba(140,220,230,.3);border-radius:10px;padding:8px 11px;
+  font-size:11px;line-height:1.5;color:#dff5f8;box-shadow:0 10px 24px rgba(0,0,0,.45);opacity:0;transition:opacity .12s;transform:translate(-50%,-110%);white-space:nowrap;z-index:10}
+.gtip b{font-size:12px}
+.gstats{display:flex;gap:8px;flex-wrap:wrap;margin-top:11px}
+
+/* ---------- Cascade ---------- */
+.cgrid{grid-template-columns:minmax(0,1fr) 330px}
+.cwrap{width:100%;display:flex;justify-content:center}
+.csvg{width:100%;max-width:1460px;height:auto;display:block;border-radius:22px;
+  background:radial-gradient(circle at 50% 50%,rgba(47,230,200,.1),transparent 30%),linear-gradient(150deg,#081d25,#04121a);border:1px solid var(--line)}
+.cnode{cursor:pointer}
+.cnode text{pointer-events:none}
+.cnode:hover .halo{opacity:.4}
+.cnode:hover .cntxt{fill:#fff}
+.cedge{transition:opacity .25s,stroke .25s}
+.cedge.hi{stroke:var(--cyan)!important;opacity:.85!important;stroke-width:2!important;animation:edgeflow 1.6s linear infinite}
+@keyframes edgeflow{to{stroke-dashoffset:-36}}
+.flowline{animation:dashflow2 16s linear infinite}
+@keyframes dashflow2{to{stroke-dashoffset:-560}}
+.legend{display:flex;gap:14px;flex-wrap:wrap;align-items:center;margin:10px 0}
+.linkitem{display:flex;justify-content:space-between;align-items:center;gap:8px;width:100%;text-align:left;padding:8px 10px;margin-bottom:7px;
+  border:1px solid rgba(255,255,255,.06);border-radius:11px;background:#081b21;font-size:12px;transition:.15s}
+.linkitem:hover{border-color:rgba(47,230,200,.45)}
+
+/* ---------- Ranking ---------- */
+.ranktable{width:100%;border-collapse:collapse;font-size:12.5px}
+.ranktable th{text-align:left;font-size:9.5px;letter-spacing:1.1px;text-transform:uppercase;color:var(--muted);padding:9px 10px;border-bottom:1px solid var(--line2);white-space:nowrap}
+.ranktable td{padding:9px 10px;border-bottom:1px solid rgba(255,255,255,.05);vertical-align:middle;white-space:nowrap}
+.ranktable tr[data-action]{cursor:pointer;transition:background .15s}
+.ranktable tr[data-action]:hover{background:rgba(47,230,200,.05)}
+.ranktable tr.active{background:rgba(47,230,200,.08)}
+.ranktable .cnum{font-family:var(--mono)}
+.wri-cell{display:flex;align-items:center;gap:9px;min-width:130px}
+.wri-bar{flex:1;height:7px;border-radius:999px;background:#08171c;overflow:hidden;min-width:64px}
+.wri-bar i{display:block;height:100%;border-radius:inherit}
+.rstate{display:block;color:var(--muted);font-size:10.5px}
+
+/* ---------- Route ---------- */
+.routebar{display:grid;grid-template-columns:1fr auto 1fr auto;gap:12px;align-items:end;margin-bottom:14px}
+.routecards{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:14px;margin-top:14px}
+
+/* ---------- Voice ---------- */
+.voicegrid{grid-template-columns:minmax(0,1.55fr) minmax(300px,.62fr)}
+.chatlog{height:480px;overflow:auto;padding:4px 4px 4px 0;display:flex;flex-direction:column;gap:10px}
+.msg{max-width:84%;padding:11px 14px;border-radius:16px;font-size:12.5px;line-height:1.6;white-space:pre-wrap;word-wrap:break-word}
+.msg.user{align-self:flex-end;background:#113f55;border:1px solid rgba(79,181,255,.25);border-bottom-right-radius:5px}
+.msg.bot{align-self:flex-start;background:#0a2f28;border:1px solid rgba(47,230,200,.22);border-bottom-left-radius:5px}
+.msg.bot.sys{background:#101f27;color:#9fc0c8;border-color:rgba(140,220,230,.12);font-size:11.5px}
+.msg .provenance{display:block;margin-top:7px;font-size:9px;letter-spacing:.8px;color:#6f98a1;text-transform:uppercase}
+.chips{display:flex;gap:7px;flex-wrap:wrap;margin:10px 0}
+.chipbtn{border:1px solid var(--line2);border-radius:999px;background:#081e26;color:#a9cdd4;padding:6px 12px;font-size:11px;transition:.15s}
+.chipbtn:hover{border-color:var(--cyan);color:#fff}
+.chatcontrols{display:grid;grid-template-columns:auto 1fr auto;gap:9px;margin-top:6px}
+.micbtn{width:46px;height:46px;border-radius:50%;border:1px solid rgba(47,230,200,.35);background:#0b2b32;font-size:17px;transition:.15s}
+.micbtn:hover{border-color:var(--cyan)}
+.micbtn.rec{box-shadow:0 0 0 6px rgba(47,230,200,.1),0 0 24px rgba(47,230,200,.3);animation:blink 1.2s infinite}
+.switch{position:relative;width:46px;height:26px;flex:0 0 46px}
+.switch input{position:absolute;opacity:0;width:100%;height:100%;margin:0;cursor:pointer}
+.switch i{position:absolute;inset:0;border-radius:999px;background:#0a2129;border:1px solid var(--line2);transition:.18s}
+.switch i:after{content:"";position:absolute;left:3px;top:3px;width:18px;height:18px;border-radius:50%;background:#5e828b;transition:.18s}
+.switch input:checked + i{background:linear-gradient(90deg,#17b9a4,#257fc8);border-color:transparent}
+.switch input:checked + i:after{transform:translateX(20px);background:#fff}
+.switch input:focus-visible + i{outline:2px solid var(--cyan);outline-offset:2px}
+.speakdot{display:inline-flex;align-items:center;gap:7px;font-size:11px;color:var(--muted)}
+.speakdot.on{color:#8ef0b4}
+
+/* ---------- Footer ---------- */
+.foot{border-top:1px solid var(--line);padding:16px 22px 20px;text-align:center;color:var(--dim);font-size:10.5px;letter-spacing:.4px}
+
+/* ---------- Responsive ---------- */
+@media(max-width:1120px){
+  .g4{grid-template-columns:repeat(2,1fr)}
+  .routecards{grid-template-columns:repeat(2,1fr)}
+  .mapgrid,.cgrid,.voicegrid{grid-template-columns:1fr}
+  .pulse{grid-template-columns:repeat(2,1fr);padding:0 20px}
+  .fm{display:none}
+}
+@media(max-width:920px){
+  .orbit{aspect-ratio:auto;min-height:0;padding:26px 18px;display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:11px;place-items:stretch}
+  .wires,.floats{display:none}
+  .core{position:static;transform:none;grid-column:1/-1;justify-self:center;width:200px;height:200px;margin-bottom:10px}
+  .robot{width:112px;height:112px}
+  .corelabel{position:static;margin-top:4px}
+  .node{position:static;transform:none;width:auto;min-height:88px}
+  .node:hover{transform:scale(1.02)}
+  .routebar{grid-template-columns:1fr 1fr;grid-auto-rows:auto}
+  .routebar .btn{grid-column:auto}
+}
+@media(max-width:640px){
+  .topbar{height:auto;min-height:60px;padding:10px 14px;flex-wrap:wrap}
+  .statusline{width:100%;justify-content:flex-start}
+  .countdown{display:none}
+  .feature-view{padding:14px 14px 30px}
+  .g3,.g4,.g2{grid-template-columns:1fr}
+  .pulse{grid-template-columns:1fr}
+  .fhead{flex-direction:column}
+  .mapbox{height:420px}
+  .chatlog{height:380px}
+  .chatcontrols{grid-template-columns:auto 1fr}
+  .chatcontrols .btn.primary{grid-column:1/-1}
+  .hero h1{letter-spacing:-1px}
+  .routecards{grid-template-columns:1fr}
+  .brandtext small{display:none}
+}
+@media(prefers-reduced-motion:reduce){
+  *,*:before,*:after{animation-duration:.001s!important;animation-iteration-count:1!important;transition-duration:.001s!important}
+  html{scroll-behavior:auto}
+}
+</style>
+</head>
+<body>
+
+<header class="topbar">
+  <div class="brand">
+    <div class="brandmark" aria-hidden="true">◎</div>
+    <div class="brandtext"><strong>CascadeAI <em>India</em></strong><small>National climate-risk intelligence</small></div>
+  </div>
+  <div class="statusline">
+    <span class="pill" role="status" aria-live="polite"><i class="dot" id="liveDot"></i><span id="liveText">Connecting to live weather network…</span></span>
+    <button class="pill citypill" id="cityPill" type="button" data-action="open-feature" data-feature="weather" title="Open the Weather &amp; Risk panel">
+      <span aria-hidden="true">◉</span><span id="cityPillText">Delhi • NCT Delhi</span></button>
+    <span class="pill countdown" id="countdownPill" title="Next automatic national refresh">Auto 05:00</span>
+    <button class="btn" id="refreshBtn" type="button" data-action="refresh"><span id="refreshIcon" aria-hidden="true">↻</span><span id="refreshLabel">Refresh now</span></button>
+  </div>
+</header>
+
+<main id="homeView">
+  <div class="hero">
+    <p class="kicker">National climate-risk intelligence • 57 live city nodes • every state connected</p>
+    <h1>From raw weather to <span>national resilience decisions</span></h1>
+    <p class="lede">Weather apps tell you what the sky will do. CascadeAI tells you what that weather <b>means</b> — for your city, for the cities connected to it, and for the decisions you should make next. Delhi is loaded as the national control city.</p>
+  </div>
+
+  <section class="orbit" aria-label="Mitra core — select a connected service">
+    <svg class="wires" viewBox="0 0 1000 560" preserveAspectRatio="none" aria-hidden="true">
+      <line x1="500" y1="263" x2="500" y2="45"/>
+      <line x1="500" y1="263" x2="800" y2="95"/>
+      <line x1="500" y1="263" x2="915" y2="263"/>
+      <line x1="500" y1="263" x2="790" y2="448"/>
+      <line x1="500" y1="263" x2="210" y2="448"/>
+      <line x1="500" y1="263" x2="85" y2="263"/>
+      <line x1="500" y1="263" x2="200" y2="95"/>
+    </svg>
+    <div class="core">
+      <svg class="robot" viewBox="0 0 200 200" role="img" aria-label="Mitra, the CascadeAI core assistant">
+        <defs>
+          <linearGradient id="rb" x1="0" x2="1"><stop offset="0" stop-color="#7ffff0"/><stop offset="1" stop-color="#3f9fff"/></linearGradient>
+        </defs>
+        <path d="M100 24v-12" stroke="#69f0df" stroke-width="5" stroke-linecap="round"/>
+        <circle cx="100" cy="10" r="6" fill="#69f0df"><animate attributeName="opacity" values="1;.35;1" dur="2.2s" repeatCount="indefinite"/></circle>
+        <rect x="45" y="35" width="110" height="78" rx="34" fill="#d7fbff" stroke="#3dbbc3" stroke-width="5"/>
+        <rect x="58" y="49" width="84" height="48" rx="23" fill="#10252c"/>
+        <circle cx="82" cy="73" r="8" fill="#55f5d8"><animate attributeName="r" values="8;6.4;8" dur="3.4s" repeatCount="indefinite"/></circle>
+        <circle cx="118" cy="73" r="8" fill="#55f5d8"><animate attributeName="r" values="8;6.4;8" dur="3.4s" repeatCount="indefinite"/></circle>
+        <path d="M87 88q13 10 26 0" fill="none" stroke="#55f5d8" stroke-width="3"/>
+        <rect x="60" y="112" width="80" height="55" rx="23" fill="url(#rb)" stroke="#d8ffff" stroke-width="4"/>
+        <circle cx="100" cy="138" r="12" fill="#123b49"/>
+        <path d="M96 130h8v16h-8z" fill="#67f5dd"/>
+        <path d="M60 128l-23 13M140 128l23 13M76 165l-9 22M124 165l9 22" stroke="#c9f9ff" stroke-width="9" stroke-linecap="round"/>
+      </svg>
+      <div class="corelabel"><b>MITRA CORE</b><small>select a connected service</small></div>
+    </div>
+    <div class="floats">
+      <div class="fm fm1">SELECTED WRI<strong id="fmWri">—</strong><span id="fmBand">awaiting first sync</span></div>
+      <div class="fm fm2">DELHI TEMP<strong id="fmTemp">—</strong><span id="fmCond">—</span></div>
+      <div class="fm fm3">LIVE CITIES<strong id="fmCities">0 / 57</strong><span id="fmUpdated">connecting…</span></div>
+    </div>
+    <button class="node n1" type="button" data-action="open-feature" data-feature="map"><i class="live" aria-hidden="true"></i><span class="nicon" aria-hidden="true">🗺️</span><b>Live India Map</b><small>WRI-coded city markers</small></button>
+    <button class="node n2" type="button" data-action="open-feature" data-feature="weather"><i class="live" aria-hidden="true"></i><span class="nicon" aria-hidden="true">🌦️</span><b>Weather &amp; Risk</b><small>Selected city intelligence</small></button>
+    <button class="node n3" type="button" data-action="open-feature" data-feature="graph"><span class="nicon" aria-hidden="true">📈</span><b>City Risk Graph</b><small>10-point live trend</small></button>
+    <button class="node n4" type="button" data-action="open-feature" data-feature="cascade"><i class="live" aria-hidden="true"></i><span class="nicon" aria-hidden="true">🕸️</span><b>Cascade Network</b><small>National risk spiral</small></button>
+    <button class="node n5" type="button" data-action="open-feature" data-feature="routing"><span class="nicon" aria-hidden="true">🛣️</span><b>Route Engine</b><small>City-to-city OSRM</small></button>
+    <button class="node n6" type="button" data-action="open-feature" data-feature="ranking"><span class="nicon" aria-hidden="true">📊</span><b>National Ranking</b><small>Live risk league</small></button>
+    <button class="node n7" type="button" data-action="open-feature" data-feature="voice"><span class="nicon" aria-hidden="true">🎙️</span><b>Mitra Voice AI</b><small>City-aware copilot</small></button>
+  </section>
+
+  <section class="pulse" aria-label="National live pulse">
+    <div class="pblock"><small>Highest risk city</small><strong id="npHigh">—</strong><span id="npHighSub">awaiting first sync</span></div>
+    <div class="pblock"><small>Moderate or above</small><strong id="npElevated">—</strong><span id="npElevatedSub">cities at WRI 25+</span></div>
+    <div class="pblock"><small>National average WRI</small><strong id="npAvg">—</strong><span id="npAvgSub">calculated across live cities</span></div>
+    <div class="pblock"><small>Last national sync</small><strong id="npSync">—</strong><span id="npSyncSub">auto-refresh every 5 minutes</span></div>
+  </section>
+
+  <div id="syncDiag" class="hidden" style="max-width:1170px;margin:16px auto 0;padding:16px 18px;border-radius:18px;border:1px solid rgba(255,91,105,.4);background:linear-gradient(155deg,rgba(15,39,48,.85),rgba(7,23,29,.94))">
+    <h3 style="margin:0 0 8px;font-size:13.5px">Live feed diagnostics — why the sync is failing on this device</h3>
+    <div id="diagBody" class="sub"></div>
+    <div class="row-actions" style="margin-top:10px">
+      <button class="btn" type="button" data-action="diag-run" id="diagRunBtn">Run connection self-test</button>
+    </div>
+    <div id="diagResult" style="margin-top:10px"></div>
+  </div>
+
+  <div class="policy">
+    <div class="ptags">
+      <span class="ptag"><b>LIVE</b> • Open-Meteo primary + wttr.in fallback</span>
+      <span class="ptag"><b>CALCULATED</b> • CascadeAI Weather Risk Index (0–100)</span>
+      <span class="ptag"><b>MODELLED</b> • Cascade network relationships</span>
+      <span class="ptag"><b>AI</b> • Mitra plain-language interpretation</span>
+    </div>
+    City names and coordinates are geographic reference metadata. Every displayed weather value comes from a live weather provider (Open-Meteo primary, wttr.in fallback); risk values are calculated from those live inputs and network links are modelled from geography and state relationships. CascadeAI shows no fabricated incidents, no simulated outages and no official warnings — it is decision-support intelligence, not an alerting authority.
+  </div>
+</main>
+
+<section id="featureView" class="feature-view hidden" aria-label="Feature workspace">
+  <div class="fshell">
+    <div class="fhead">
+      <div class="ftitlebox">
+        <h2 id="fTitle"></h2>
+        <p id="fSub"></p>
+        <div class="tags" id="fTags"></div>
+      </div>
+      <button class="btn" id="backBtn" type="button" data-action="home">← Back to Mitra Core</button>
+    </div>
+    <div id="featureContent"></div>
+  </div>
+</section>
+
+<footer class="foot">CascadeAI India v11 — a national climate-risk intelligence prototype • LIVE data: Open-Meteo + wttr.in failover • MAP: Leaflet + key-free basemap providers • ROUTING: OSRM • Risk &amp; network outputs are CALCULATED / MODELLED, not official warnings • <b>BUILD 11.5-GH3</b></footer>
+
+<script>
+'use strict';
+/* =====================================================================
+   CascadeAI India v11 — single-file architecture
+   1  CONFIG & CITY REGISTRY          2  STATE
+   3  UTILITIES                       4  RISK ENGINE (CALCULATED)
+   5  WEATHER SERVICE (LIVE)          6  REFRESH MANAGER (one 5-min scheduler)
+   7  NAVIGATION & GLOBAL EVENTS      8  HOME (MITRA CORE)
+   9  FEATURE: WEATHER & RISK        10  FEATURE: INDIA MAP (Leaflet/OSM)
+   11 FEATURE: CITY RISK GRAPH (SVG) 12  FEATURE: CASCADE NETWORK (SVG)
+   13 FEATURE: NATIONAL RANKING      14  FEATURE: ROUTE ENGINE (OSRM)
+   15 FEATURE: MITRA VOICE           16  INIT
+   ===================================================================== */
+
+/* ============================ 1. CONFIG & CITY REGISTRY ============================ */
+const DEFAULT_CITY_ID='delhi';
+const REFRESH_MS=5*60*1000;          // one national primary request every 5 minutes
+const HOUR_WINDOW=10;                // graph shows 10 hourly points at a time
+
+/* Two major cities per state + Delhi as national control city.
+   Coordinates are geographic reference metadata only (no operational values live here). */
+const CITY_NODES=[
+ {id:'visakhapatnam',name:'Visakhapatnam',state:'Andhra Pradesh',lat:17.6868,lon:83.2185,region:'South'},
+ {id:'vijayawada',name:'Vijayawada',state:'Andhra Pradesh',lat:16.5062,lon:80.648,region:'South'},
+ {id:'itanagar',name:'Itanagar',state:'Arunachal Pradesh',lat:27.0844,lon:93.6053,region:'Northeast'},
+ {id:'pasighat',name:'Pasighat',state:'Arunachal Pradesh',lat:28.0663,lon:95.3268,region:'Northeast'},
+ {id:'guwahati',name:'Guwahati',state:'Assam',lat:26.1445,lon:91.7362,region:'Northeast'},
+ {id:'dibrugarh',name:'Dibrugarh',state:'Assam',lat:27.4728,lon:94.912,region:'Northeast'},
+ {id:'patna',name:'Patna',state:'Bihar',lat:25.5941,lon:85.1376,region:'East'},
+ {id:'gaya',name:'Gaya',state:'Bihar',lat:24.7914,lon:85.0002,region:'East'},
+ {id:'raipur',name:'Raipur',state:'Chhattisgarh',lat:21.2514,lon:81.6296,region:'Central'},
+ {id:'bilaspur-cg',name:'Bilaspur',state:'Chhattisgarh',lat:22.0797,lon:82.1409,region:'Central'},
+ {id:'panaji',name:'Panaji',state:'Goa',lat:15.4909,lon:73.8278,region:'West'},
+ {id:'margao',name:'Margao',state:'Goa',lat:15.2832,lon:73.9862,region:'West'},
+ {id:'ahmedabad',name:'Ahmedabad',state:'Gujarat',lat:23.0225,lon:72.5714,region:'West'},
+ {id:'surat',name:'Surat',state:'Gujarat',lat:21.1702,lon:72.8311,region:'West'},
+ {id:'gurugram',name:'Gurugram',state:'Haryana',lat:28.4595,lon:77.0266,region:'North'},
+ {id:'faridabad',name:'Faridabad',state:'Haryana',lat:28.4089,lon:77.3178,region:'North'},
+ {id:'shimla',name:'Shimla',state:'Himachal Pradesh',lat:31.1048,lon:77.1734,region:'North'},
+ {id:'dharamshala',name:'Dharamshala',state:'Himachal Pradesh',lat:32.219,lon:76.3234,region:'North'},
+ {id:'ranchi',name:'Ranchi',state:'Jharkhand',lat:23.3441,lon:85.3096,region:'East'},
+ {id:'jamshedpur',name:'Jamshedpur',state:'Jharkhand',lat:22.8046,lon:86.2029,region:'East'},
+ {id:'bengaluru',name:'Bengaluru',state:'Karnataka',lat:12.9716,lon:77.5946,region:'South'},
+ {id:'mysuru',name:'Mysuru',state:'Karnataka',lat:12.2958,lon:76.6394,region:'South'},
+ {id:'thiruvananthapuram',name:'Thiruvananthapuram',state:'Kerala',lat:8.5241,lon:76.9366,region:'South'},
+ {id:'kochi',name:'Kochi',state:'Kerala',lat:9.9312,lon:76.2673,region:'South'},
+ {id:'indore',name:'Indore',state:'Madhya Pradesh',lat:22.7196,lon:75.8577,region:'Central'},
+ {id:'bhopal',name:'Bhopal',state:'Madhya Pradesh',lat:23.2599,lon:77.4126,region:'Central'},
+ {id:'mumbai',name:'Mumbai',state:'Maharashtra',lat:19.076,lon:72.8777,region:'West'},
+ {id:'pune',name:'Pune',state:'Maharashtra',lat:18.5204,lon:73.8567,region:'West'},
+ {id:'imphal',name:'Imphal',state:'Manipur',lat:24.817,lon:93.9368,region:'Northeast'},
+ {id:'thoubal',name:'Thoubal',state:'Manipur',lat:24.6388,lon:94.0082,region:'Northeast'},
+ {id:'shillong',name:'Shillong',state:'Meghalaya',lat:25.5788,lon:91.8933,region:'Northeast'},
+ {id:'tura',name:'Tura',state:'Meghalaya',lat:25.5142,lon:90.202,region:'Northeast'},
+ {id:'aizawl',name:'Aizawl',state:'Mizoram',lat:23.7271,lon:92.7176,region:'Northeast'},
+ {id:'lunglei',name:'Lunglei',state:'Mizoram',lat:22.8671,lon:92.7655,region:'Northeast'},
+ {id:'kohima',name:'Kohima',state:'Nagaland',lat:25.6751,lon:94.1086,region:'Northeast'},
+ {id:'dimapur',name:'Dimapur',state:'Nagaland',lat:25.9091,lon:93.7266,region:'Northeast'},
+ {id:'bhubaneswar',name:'Bhubaneswar',state:'Odisha',lat:20.2961,lon:85.8245,region:'East'},
+ {id:'cuttack',name:'Cuttack',state:'Odisha',lat:20.4625,lon:85.883,region:'East'},
+ {id:'ludhiana',name:'Ludhiana',state:'Punjab',lat:30.901,lon:75.8573,region:'North'},
+ {id:'amritsar',name:'Amritsar',state:'Punjab',lat:31.634,lon:74.8723,region:'North'},
+ {id:'jaipur',name:'Jaipur',state:'Rajasthan',lat:26.9124,lon:75.7873,region:'North'},
+ {id:'jodhpur',name:'Jodhpur',state:'Rajasthan',lat:26.2389,lon:73.0243,region:'North'},
+ {id:'gangtok',name:'Gangtok',state:'Sikkim',lat:27.3389,lon:88.6065,region:'Northeast'},
+ {id:'namchi',name:'Namchi',state:'Sikkim',lat:27.1667,lon:88.35,region:'Northeast'},
+ {id:'chennai',name:'Chennai',state:'Tamil Nadu',lat:13.0827,lon:80.2707,region:'South'},
+ {id:'coimbatore',name:'Coimbatore',state:'Tamil Nadu',lat:11.0168,lon:76.9558,region:'South'},
+ {id:'hyderabad',name:'Hyderabad',state:'Telangana',lat:17.385,lon:78.4867,region:'South'},
+ {id:'warangal',name:'Warangal',state:'Telangana',lat:17.9689,lon:79.5941,region:'South'},
+ {id:'agartala',name:'Agartala',state:'Tripura',lat:23.8315,lon:91.2868,region:'Northeast'},
+ {id:'udaipur-tr',name:'Udaipur',state:'Tripura',lat:23.5333,lon:91.4833,region:'Northeast'},
+ {id:'lucknow',name:'Lucknow',state:'Uttar Pradesh',lat:26.8467,lon:80.9462,region:'Central'},
+ {id:'kanpur',name:'Kanpur',state:'Uttar Pradesh',lat:26.4499,lon:80.3319,region:'Central'},
+ {id:'dehradun',name:'Dehradun',state:'Uttarakhand',lat:30.3165,lon:78.0322,region:'North'},
+ {id:'haldwani',name:'Haldwani',state:'Uttarakhand',lat:29.2183,lon:79.513,region:'North'},
+ {id:'kolkata',name:'Kolkata',state:'West Bengal',lat:22.5726,lon:88.3639,region:'East'},
+ {id:'siliguri',name:'Siliguri',state:'West Bengal',lat:26.7271,lon:88.3953,region:'East'},
+ {id:'delhi',name:'Delhi',state:'NCT Delhi',lat:28.6139,lon:77.209,region:'North'}
+];
+
+/* Common alternate names used only by the Mitra voice/text parser. */
+const CITY_ALIASES={'bangalore':'bengaluru','trivandrum':'thiruvananthapuram','vizag':'visakhapatnam',
+ 'gurgaon':'gurugram','mysore':'mysuru','cochin':'kochi','calcutta':'kolkata','madras':'chennai',
+ 'bombay':'mumbai','new delhi':'delhi'};
+
+const FEATURES={
+ map:    {title:'Live India Risk Map', sub:'Every national city node, colour-coded by its current calculated Weather Risk Index. Click any marker to make that city the context for the entire platform.',
+          tags:[['map','MAP','Leaflet • key-free basemaps'],['live','LIVE','Multi-provider weather'],['calc','CALCULATED','CascadeAI WRI']]},
+ weather:{title:'Weather & Risk — City Intelligence', sub:'Current live conditions for the selected city with an explainable risk breakdown. Choose any city; every module follows your selection.',
+          tags:[['live','LIVE','Multi-provider weather'],['calc','CALCULATED','CascadeAI WRI']]},
+ graph:  {title:'City Risk Graph', sub:'A ten-point Weather Risk Index trend recalculated from this city\u2019s own live hourly forecast. Move between the previous, current and next windows.',
+          tags:[['live','LIVE','Provider forecast'],['calc','CALCULATED','WRI per hour']]},
+ cascade:{title:'National Cascade Network', sub:'All 57 city nodes arranged around the CascadeAI core. Links are MODELLED from geography, state and regional relationships — not observed infrastructure failures.',
+          tags:[['live','LIVE','Node risk state'],['model','MODELLED','CascadeAI network'],['calc','CALCULATED','WRI']]},
+ ranking:{title:'National Risk Ranking', sub:'The live national league table. Sorting always uses the current loaded weather state, and selecting a row switches the whole platform to that city.',
+          tags:[['live','LIVE','Multi-provider weather'],['calc','CALCULATED','CascadeAI WRI']]},
+ routing:{title:'Live Route Engine', sub:'Real road routing between any two national city nodes via public OSRM, with weather-risk context at both endpoints.',
+          tags:[['map','ROUTING','OSRM'],['map','MAP','Leaflet basemap'],['model','MODELLED','Endpoint risk estimate']]},
+ voice:  {title:'Mitra Voice AI', sub:'A grounded conversational copilot. Mitra answers from the current live national state — ask about any city, compare cities, find risk hotspots or request routes.',
+          tags:[['calc','GROUNDED','Live site state'],['live','LIVE','Multi-provider weather']]}
+};
+
+/* Risk bands — the exact same four colours are used everywhere in the product. */
+const BANDS=[
+ {max:25, name:'LOW',      color:'#3ddc84'},
+ {max:50, name:'MODERATE', color:'#ffd257'},
+ {max:75, name:'HIGH',     color:'#ff9b45'},
+ {max:100,name:'SEVERE',   color:'#ff5b69'}
+];
+
+/* ============================ 2. STATE ============================ */
+const S={
+ selectedCityId:DEFAULT_CITY_ID,
+ weather:new Map(),          // cityId -> live packet {temp,rh,...,comp,hourly,hourlyIndex,fetchedAt}
+ activeFeature:null,         // null = Mitra Core home
+ refreshing:false, refreshSeq:0, stale:false, lastUpdated:0,
+ nextRefreshAt:0, autoTimer:null, retryTimer:null, countTimer:null,
+ graphOffset:0, rankSort:'high',
+ route:{from:'delhi',to:'jaipur',lastKey:'',lastRoute:null,rSeq:0},
+ voice:{speak:false,listening:false,recognizer:null},
+ chat:[], lastCityMentioned:DEFAULT_CITY_ID, lastCities:[DEFAULT_CITY_ID],
+ mapSearch:'', mapReady:false
+};
+/* Map instances live outside S so teardown is explicit. */
+const LM={india:null,route:null,indiaMarkers:new Map(),routeLayer:null};
+
+/* ============================ 3. UTILITIES ============================ */
+const $=id=>document.getElementById(id);
+function clamp(v,a=0,b=100){v=Number(v);if(!Number.isFinite(v))return 0;return Math.max(a,Math.min(b,v))}
+function num(v){const n=Number(v);return Number.isFinite(n)?n:NaN}
+function fmt(v,d=1){const n=Number(v);return Number.isFinite(n)?n.toFixed(d):'—'}
+function esc(s=''){return String(s).replace(/[&<>'"]/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;',"'":'&#39;','"':'&quot;'}[m]))}
+function riskBand(v){const x=clamp(v);return BANDS.find(b=>x<=b.max)||BANDS[3]}
+function havKm(a,b){const R=6371,d=Math.PI/180,dl=(b.lat-a.lat)*d,dn=(b.lon-a.lon)*d,
+ x=Math.sin(dl/2)**2+Math.cos(a.lat*d)*Math.cos(b.lat*d)*Math.sin(dn/2)**2;return 2*R*Math.asin(Math.sqrt(x))}
+function nearestCities(city,k=2){return CITY_NODES.filter(c=>c.id!==city.id)
+ .map(c=>({c,d:havKm(city,c)})).sort((a,b)=>a.d-b.d).slice(0,k).map(o=>o.c)}
+function cityById(id){return CITY_NODES.find(c=>c.id===id)||null}
+function selectedCity(){return cityById(S.selectedCityId)||cityById(DEFAULT_CITY_ID)}
+function selectedWeather(){return S.weather.get(S.selectedCityId)}
+function fmtClock(ts){if(!ts)return '—';return new Date(ts).toLocaleTimeString('en-IN',{hour:'2-digit',minute:'2-digit'})}
+function hhmm(iso){return (typeof iso==='string'&&iso.length>=16)?iso.slice(11,16):'—'}
+function debounce(fn,ms){let t;return(...a)=>{clearTimeout(t);t=setTimeout(()=>fn(...a),ms)}}
+function shortName(n,max=13){return n.length>max?n.slice(0,max-1)+'…':n}
+function weatherText(code){const m={0:'Clear sky',1:'Mainly clear',2:'Partly cloudy',3:'Overcast',
+ 45:'Fog',48:'Rime fog',51:'Light drizzle',53:'Drizzle',55:'Dense drizzle',56:'Freezing drizzle',57:'Freezing drizzle',
+ 61:'Light rain',63:'Rain',65:'Heavy rain',66:'Freezing rain',67:'Freezing rain',
+ 71:'Light snow',73:'Snow',75:'Heavy snow',77:'Snow grains',80:'Rain showers',81:'Heavy showers',82:'Violent showers',
+ 85:'Snow showers',86:'Snow showers',95:'Thunderstorm',96:'Thunderstorm + hail',99:'Severe thunderstorm + hail'};
+ return m[Number(code)]||'Weather code '+code}
+function weatherIcon(code){const c=Number(code);
+ if(c===0)return '☀️';if(c===1)return '🌤️';if(c===2)return '⛅';if(c===3)return '☁️';
+ if(c===45||c===48)return '🌫️';if(c>=51&&c<=57)return '🌦️';if((c>=61&&c<=67)||(c>=80&&c<=82))return '🌧️';
+ if((c>=71&&c<=77)||c===85||c===86)return '🌨️';if(c>=95)return '⛈️';return '🌡️'}
+function sourceTag(text,kind='LIVE'){const k=kind.toLowerCase();
+ return `<span class="src ${k==='live'?'':k}"><i></i>${esc(kind)} • ${esc(text)}</span>`}
+function featureTagsHtml(keys){return FEATURES[keys].tags.map(t=>`<span class="tag ${t[0]}"><b>${t[1]}</b> • ${esc(t[2])}</span>`).join('')}
+/* ============================ 4. RISK ENGINE (CALCULATED) ============================
+   Combines live weather inputs into a 0-100 Weather Risk Index. The exact weights
+   stay internal — the UI shows bands, the dominant driver and plain language only. */
+function severeCodeScore(code){const c=Number(code);
+ if(c===95||c===96||c===99)return 100;
+ if(c===65||c===82||c===66||c===67)return 85;
+ if(c===63||c===81)return 65;
+ if(c===61||c===80||c===55)return 45;
+ if(c===45||c===48)return 35;
+ if(c===71||c===73||c===75||c===77||c===85||c===86)return 30;
+ if(c===51||c===53||c===56||c===57)return 25;
+ return 5}
+function computeComponents(o){
+ const tNow=num(o.temp),tFeel=num(o.apparent);
+ const hot=Math.max(Number.isFinite(tFeel)?tFeel:-999,Number.isFinite(tNow)?tNow:-999);
+ const heat=(hot>-99)?clamp((hot-24)*6.2):0;
+ const cold=(Number.isFinite(tNow)&&tNow<8)?clamp((8-tNow)*4.5):0;
+ const H=Math.max(heat,cold);
+ const P=clamp((num(o.precipProb)||0)*.62+Math.min(num(o.precip)||0,20)*3.2);
+ const W=clamp(Math.max(((num(o.wind)||0)-12)*2,((num(o.gust)||0)-18)*1.65));
+ let V=0;const vis=num(o.visibility);
+ if(Number.isFinite(vis)){V=clamp((10-vis/1000)*11.1)}
+ else if(o.code===45||o.code===48){V=60}
+ const Sv=severeCodeScore(o.code);
+ const wri=clamp(Math.round(.35*H+.25*P+.20*W+.10*V+.10*Sv));
+ return{H:Math.round(H),P:Math.round(P),W:Math.round(W),V:Math.round(V),S:Sv,wri,
+  mode:cold>heat?'cold':'heat'}}
+function factorList(w){return[
+ [w.comp.mode==='cold'?'Cold stress':'Heat stress',w.comp.H],
+ ['Precipitation stress',w.comp.P],
+ ['Wind stress',w.comp.W],
+ ['Low visibility',w.comp.V],
+ ['Severe weather signal',w.comp.S]]}
+function driverName(w){const f=[...factorList(w)].sort((a,b)=>b[1]-a[1])[0];
+ return f[0].replace(' stress','').replace('Low visibility','Visibility').replace('Severe weather signal','Storm system')}
+function explainRisk(w){const out=[];
+ if(w.comp.mode==='cold'&&w.comp.H>=10)out.push(`Temperatures near ${fmt(w.temp,0)}°C are putting cold-wave pressure on outdoor work, transport and vulnerable groups.`);
+ else if(w.comp.H>=10)out.push(`It feels like ${fmt(w.apparent,0)}°C — heat load is the dominant contribution to the current index.`);
+ if(w.comp.P>=10)out.push(`Precipitation probability is ${fmt(w.precipProb,0)}% this hour with ${fmt(w.precip,1)} mm observed — wet-weather disruption is likely on roads and drainage.`);
+ if(w.comp.W>=10)out.push(`Sustained wind is ${fmt(w.wind,0)} km/h with gusts to ${fmt(w.gust,0)} km/h — local transport and temporary structures are under stress.`);
+ if(w.comp.V>=10)out.push(`Visibility is down to about ${fmt((num(w.visibility)||0)/1000,1)} km — fog or haze is reducing corridor reliability.`);
+ if(w.comp.S>=25)out.push(`The live weather code reports “${weatherText(w.code)}” — a severe-weather signal is active right now.`);
+ if(!out.length)out.push(`All modelled factors are calm: mild ${fmt(w.temp,0)}°C conditions, light wind (${fmt(w.wind,0)} km/h) and ${fmt(w.precipProb,0)}% precipitation probability this hour.`);
+ out.push('These live inputs are combined into the 0–100 index by the CascadeAI risk engine — a calculated model output, not an official warning.');
+ return out}
+
+/* ============================ 5. WEATHER SERVICE (LIVE) ============================
+   GitHub Pages stable strategy:
+   1) ONE batched Open-Meteo request for all 57 cities.
+   2) Alternate Open-Meteo GFS endpoint if the primary endpoint is unavailable.
+   3) Keyless wttr.in browser fallback if Open-Meteo cannot serve the request.
+   4) Last-good IndexedDB cache remains visible; no fabricated observations.
+*/
+const OM_BASES=[
+ {name:'Open-Meteo Forecast',url:'https://api.open-meteo.com/v1/forecast'},
+ {name:'Open-Meteo GFS',url:'https://api.open-meteo.com/v1/gfs'}
+];
+const WTTR_BASE='https://wttr.in';
+const CUR_VARS='temperature_2m,relative_humidity_2m,apparent_temperature,precipitation,weather_code,surface_pressure,wind_speed_10m,wind_gusts_10m';
+const HR_VARS='temperature_2m,relative_humidity_2m,apparent_temperature,precipitation_probability,precipitation,weather_code,wind_speed_10m,wind_gusts_10m,visibility';
+const OM_CACHE_KEY='cascadeai.weather.cache.v4';
+const OM_CACHE_TTL=15*60*1000;
+const WTTR_MIN_REFRESH=15*60*1000;
+let LAST_WTTR_FETCH=0;
+const OM_DB_NAME='CascadeAIWeatherDB';
+const OM_DB_STORE='snapshots';
+function openWeatherDB(){return new Promise((resolve,reject)=>{if(!('indexedDB' in window)){reject(new Error('IndexedDB unavailable'));return}const req=indexedDB.open(OM_DB_NAME,1);req.onupgradeneeded=()=>{const db=req.result;if(!db.objectStoreNames.contains(OM_DB_STORE))db.createObjectStore(OM_DB_STORE)};req.onsuccess=()=>resolve(req.result);req.onerror=()=>reject(req.error||new Error('Could not open weather database'))})}
+async function idbGet(key){const db=await openWeatherDB();return new Promise((resolve,reject)=>{const tx=db.transaction(OM_DB_STORE,'readonly'),req=tx.objectStore(OM_DB_STORE).get(key);req.onsuccess=()=>resolve(req.result);req.onerror=()=>reject(req.error||new Error('Weather cache read failed'));tx.oncomplete=()=>db.close();tx.onerror=()=>{db.close();reject(tx.error||new Error('Weather cache transaction failed'))}})}
+async function idbPut(key,value){const db=await openWeatherDB();return new Promise((resolve,reject)=>{const tx=db.transaction(OM_DB_STORE,'readwrite');tx.objectStore(OM_DB_STORE).put(value,key);tx.oncomplete=()=>{db.close();resolve(true)};tx.onerror=()=>{db.close();reject(tx.error||new Error('Weather cache write failed'))};tx.onabort=()=>{db.close();reject(tx.error||new Error('Weather cache write aborted'))}})}
+function restoreWeatherSnapshot(saved){if(!saved||!Array.isArray(saved.packets))return 0;let restored=0;saved.packets.forEach(([id,p])=>{const city=cityById(id);if(!city||!p||!Number.isFinite(Number(p.temp))||!Number.isFinite(Number(p.code)))return;try{p.comp=computeComponents(p);S.weather.set(id,p);restored++}catch(e){}});if(restored){S.lastUpdated=Number(saved.savedAt)||0;S.stale=!S.lastUpdated||(Date.now()-S.lastUpdated)>OM_CACHE_TTL}return restored}
+async function readWeatherCache(){try{const saved=await idbGet('weather'),n=restoreWeatherSnapshot(saved);if(n)return n}catch(e){}try{const raw=localStorage.getItem(OM_CACHE_KEY);if(raw)return restoreWeatherSnapshot(JSON.parse(raw))}catch(e){}return 0}
+async function persistWeatherCache(){const snapshot={savedAt:S.lastUpdated||Date.now(),packets:[...S.weather.entries()]};try{await idbPut('weather',snapshot);return true}catch(e){}try{localStorage.setItem(OM_CACHE_KEY,JSON.stringify(snapshot));return true}catch(e){}return false}
+function providerName(w){return (w&&w.source)||'live weather provider'}
+function weatherSourceSummary(){const a=[...S.weather.values()].map(w=>w.source).filter(Boolean);return a.length?[...new Set(a)].join(' + '):'live weather'}
+function omAllUrl(base){const params=new URLSearchParams({latitude:CITY_NODES.map(c=>c.lat).join(','),longitude:CITY_NODES.map(c=>c.lon).join(','),current:CUR_VARS,hourly:HR_VARS,forecast_hours:'36',timezone:'Asia/Kolkata'});return `${base}?${params.toString()}`}
+async function fetchJson(url,timeoutMs=18000){const ctrl=new AbortController(),to=setTimeout(()=>ctrl.abort(),timeoutMs);try{const r=await fetch(url,{cache:'no-store',credentials:'omit',headers:{Accept:'application/json'},signal:ctrl.signal});if(!r.ok){const e=new Error(`HTTP ${r.status}`);e.status=r.status;throw e}return await r.json()}catch(e){if(e&&e.name==='AbortError')throw new Error('request timed out');throw e}finally{clearTimeout(to)}}
+function isoMinutes(iso){const m=/^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})/.exec(String(iso||''));return m?Date.UTC(+m[1],+m[2]-1,+m[3],+m[4],+m[5])/60000:NaN}
+function nearestHourlyIndex(times,nowIso){if(!Array.isArray(times)||!times.length)return 0;const nowM=isoMinutes(nowIso);let idx=0,d=Infinity;times.forEach((t,i)=>{const tm=isoMinutes(t);if(!Number.isFinite(tm))return;const x=Math.abs(tm-nowM);if(x<d){d=x;idx=i}});return idx}
+function ingestOpenMeteo(city,data,source){try{const c=data&&data.current,h=data&&data.hourly;if(!c||!h||!Array.isArray(h.time)||!h.time.length)return false;const ci=nearestHourlyIndex(h.time,c.time);const p={temp:num(c.temperature_2m),rh:num(c.relative_humidity_2m),apparent:num(c.apparent_temperature),precip:num(c.precipitation)||0,precipProb:num((h.precipitation_probability||[])[ci])||0,code:num(c.weather_code),wind:num(c.wind_speed_10m)||0,gust:num(c.wind_gusts_10m)||0,visibility:num((h.visibility||[])[ci]),pressure:num(c.surface_pressure),time:c.time,hourly:h,hourlyIndex:ci,fetchedAt:Date.now(),source};if(!Number.isFinite(p.temp)||!Number.isFinite(p.code))return false;p.comp=computeComponents(p);S.weather.set(city.id,p);return true}catch(e){return false}}
+async function tryOpenMeteo(base){const payload=await fetchJson(omAllUrl(base.url));const list=Array.isArray(payload)?payload:[payload];if(list.length<CITY_NODES.length)throw new Error(`incomplete national batch (${list.length}/${CITY_NODES.length})`);let ok=0;CITY_NODES.forEach((city,i)=>{if(ingestOpenMeteo(city,list[i],base.name))ok++});if(ok<Math.ceil(CITY_NODES.length*.9))throw new Error(`only ${ok}/${CITY_NODES.length} usable city packets`);return ok}
+function wwoToWmo(desc){const x=String(desc||'').toLowerCase();if(/thunder/.test(x))return 95;if(/heavy.*rain|torrential/.test(x))return 65;if(/rain|shower/.test(x))return 61;if(/drizzle/.test(x))return 53;if(/snow|sleet|ice/.test(x))return 73;if(/fog|mist/.test(x))return 45;if(/overcast/.test(x))return 3;if(/cloud/.test(x))return 2;return 0}
+function wttrIso(date,timeVal){const n=parseInt(timeVal||0,10),h=Math.floor(n/100),m=n%100;return `${date}T${String(h).padStart(2,'0')}:${String(m).padStart(2,'0')}`}
+function ingestWttr(city,d){try{const cur=d&&d.current_condition&&d.current_condition[0],days=d&&d.weather;if(!cur||!Array.isArray(days)||!days.length)return false;const pts=[];days.forEach(day=>(day.hourly||[]).forEach(h=>pts.push({time:wttrIso(day.date,h.time),temp:num(h.tempC),apparent:num(h.FeelsLikeC),rh:num(h.humidity),precip:num(h.precipMM),precipProb:num(h.chanceofrain),code:wwoToWmo((h.weatherDesc&&h.weatherDesc[0]&&h.weatherDesc[0].value)||''),wind:num(h.windspeedKmph),gust:num(h.WindGustKmph)||0,visibility:Number.isFinite(num(h.visibility))?num(h.visibility)*1000:NaN})));pts.sort((a,b)=>String(a.time).localeCompare(String(b.time)));const ist=new Date(Date.now()+330*60000).toISOString().slice(0,16),ci=nearestHourlyIndex(pts.map(x=>x.time),ist),near=pts[ci]||{},desc=(cur.weatherDesc&&cur.weatherDesc[0]&&cur.weatherDesc[0].value)||'';const p={temp:num(cur.temp_C),rh:num(cur.humidity),apparent:num(cur.FeelsLikeC),precip:num(cur.precipMM)||0,precipProb:num(near.precipProb)||0,code:wwoToWmo(desc),wind:num(cur.windspeedKmph)||0,gust:num(near.gust)||0,visibility:Number.isFinite(num(cur.visibility))?num(cur.visibility)*1000:NaN,pressure:num(cur.pressure),time:ist,fetchedAt:Date.now(),source:'wttr.in fallback'};p.hourly={time:pts.map(x=>x.time),temperature_2m:pts.map(x=>x.temp),relative_humidity_2m:pts.map(x=>x.rh),apparent_temperature:pts.map(x=>x.apparent),precipitation_probability:pts.map(x=>x.precipProb),precipitation:pts.map(x=>x.precip),weather_code:pts.map(x=>x.code),wind_speed_10m:pts.map(x=>x.wind),wind_gusts_10m:pts.map(x=>x.gust),visibility:pts.map(x=>x.visibility)};p.hourlyIndex=ci;if(!Number.isFinite(p.temp))return false;p.comp=computeComponents(p);S.weather.set(city.id,p);return true}catch(e){return false}}
+async function fetchWttrNational(){if(Date.now()-LAST_WTTR_FETCH<WTTR_MIN_REFRESH&&[...S.weather.values()].some(w=>w.source==='wttr.in fallback'))return{ok:S.weather.size,fail:0,errors:[],reused:true};let next=0,ok=0,fail=0;const errors=[];const workers=Array.from({length:6},async()=>{while(next<CITY_NODES.length){const city=CITY_NODES[next++];try{const d=await fetchJson(`${WTTR_BASE}/${city.lat.toFixed(4)},${city.lon.toFixed(4)}?format=j1`,12000);if(ingestWttr(city,d))ok++;else{fail++;errors.push(city.name+': invalid fallback packet')}}catch(e){fail++;errors.push(city.name+': '+(e.message||'fallback failed'))}}});await Promise.all(workers);if(ok)LAST_WTTR_FETCH=Date.now();return{ok,fail,errors,reused:false}}
+async function fetchNationalWeather(){const errors=[];for(const base of OM_BASES){try{const ok=await tryOpenMeteo(base);return{ok,fail:CITY_NODES.length-ok,of:CITY_NODES.length,errors,provider:base.name,reused:false}}catch(e){errors.push(base.name+': '+(e.message||'failed'))}}try{const f=await fetchWttrNational();return{ok:f.ok,fail:f.fail,of:CITY_NODES.length,errors:errors.concat(f.errors||[]),provider:f.reused?'wttr.in cached fallback':'wttr.in fallback',reused:f.reused}}catch(e){errors.push('wttr.in fallback: '+(e.message||'failed'));return{ok:0,fail:CITY_NODES.length,of:CITY_NODES.length,errors,provider:'none',reused:false}}}
+
+/* ============================ 6. REFRESH MANAGER ============================
+   ONE scheduler for the whole application. Manual refreshes never navigate the user,
+   never fabricate data, and never duplicate concurrent requests. */
+function setLiveStatus(text,state){const dot=$('liveDot'),tx=$('liveText');if(!dot||!tx)return;
+ tx.textContent=text;dot.className='dot'+(state==='busy'?' busy':state==='stale'?' stale':'')}
+function setRefreshUI(busy){const b=$('refreshBtn'),l=$('refreshLabel'),i=$('refreshIcon');if(!b)return;
+ b.classList.toggle('busy',busy);l.textContent=busy?'Syncing…':'Refresh now';
+ i.innerHTML=busy?'<span class="spin">↻</span>':'↻'}
+async function refreshNow(){
+ if(S.refreshing)return;S.refreshing=true;const seq=++S.refreshSeq;setRefreshUI(true);setLiveStatus('Syncing live national weather…','busy');
+ try{const res=await fetchNationalWeather();if(seq!==S.refreshSeq)return;
+  if(res.ok>0){if(!res.reused){S.lastUpdated=Date.now();S.stale=res.ok<res.of;await persistWeatherCache()}hideSyncDiag();setLiveStatus(`${res.ok}/${res.of} cities ready • ${res.provider}${res.reused?' • recent fallback cache':' • updated '+fmtClock(S.lastUpdated)}`,res.ok<res.of?'stale':undefined)}
+  else if(S.weather.size){S.stale=true;setLiveStatus('Live providers unavailable — showing last successful snapshot','stale');showSyncDiag(res.errors);armRetry(60*1000)}
+  else{S.stale=true;setLiveStatus('Weather providers unavailable — diagnostics shown below','stale');showSyncDiag(res.errors);armRetry(60*1000)}
+ }catch(e){if(seq!==S.refreshSeq)return;S.stale=true;setLiveStatus(S.weather.size?'Weather sync failed — last successful snapshot remains visible':'Weather sync failed — see diagnostics below','stale');showSyncDiag(null,e&&e.message);armRetry(60*1000)}
+ finally{if(seq===S.refreshSeq){S.refreshing=false;setRefreshUI(false)}publishWeatherUpdate()}
+}
+function armRetry(ms){if(S.retryTimer)clearTimeout(S.retryTimer);
+ S.retryTimer=setTimeout(()=>{S.retryTimer=null;refreshNow()},ms||60*1000)}
+
+/* --- Sync diagnostics (build 11.4-HF4) -------------------------------------
+   When the first sync fails, the page now SHOWS why instead of failing
+   silently in the console: the exact provider errors plus a one-click
+   self-test that pings every external service the page depends on. */
+function pingOnce(url,ms){return new Promise(resolve=>{
+ const ctrl=('AbortController' in window)?new AbortController():null;
+ const to=setTimeout(()=>{if(ctrl)ctrl.abort();resolve('timeout')},ms||8000);
+ fetch(url,{cache:'no-store',signal:ctrl?ctrl.signal:undefined})
+  .then(r=>{clearTimeout(to);resolve(r.ok?'OK':'HTTP '+r.status)})
+  .catch(e=>{clearTimeout(to);resolve(e&&e.name==='AbortError'?'timeout':((e&&e.message)||'failed'))})})}
+async function runSelfTest(){
+ const out=$('diagResult');if(out)out.innerHTML='<div class="sub">Testing connections from this browser…</div>';
+ const tests=[
+  ['Open-Meteo primary','https://api.open-meteo.com/v1/forecast?latitude=28.6139&longitude=77.209&current=temperature_2m'],
+  ['wttr.in fallback','https://wttr.in/28.6139,77.209?format=j1'],
+  ['Leaflet map CDN (unpkg)','https://unpkg.com/leaflet@1.9.4/dist/leaflet.js'],
+  ['OSRM routing service','https://router.project-osrm.org/route/v1/driving/77.209,28.6139;75.7873,26.9124?overview=false'],
+  ['Google Fonts','https://fonts.googleapis.com/css2?family=Inter:wght@400&display=swap']];
+ const rows=await Promise.all(tests.map(async t=>[t[0],t[1].startsWith('SKIPPED')?t[1]:await pingOnce(t[1])]));
+ const chip=(name,r)=>{const ok=r==='OK',skip=String(r).startsWith('SKIPPED');
+  return `<span class="chip" style="border-color:${skip?'rgba(255,210,87,.35)':ok?'rgba(61,220,132,.45)':'rgba(255,91,105,.45)'}">${esc(name)} <b style="color:${skip?'var(--yellow)':ok?'var(--green)':'var(--red)'}">${esc(r)}</b></span>`};
+ if(out)out.innerHTML=rows.map(r=>chip(r[0],r[1])).join(' ')+
+  (rows.every(r=>r[1]==='OK'||String(r[1]).startsWith('SKIPPED'))
+   ?'<div class="good" style="margin-top:8px">All services are reachable from this browser — the next sync should succeed. Press “Refresh now”.</div>'
+   :'<div class="err" style="margin-top:8px">The failing row above names the blocked service. That is what your network (VPN, firewall, ad-blocker/privacy extension) or connection is stopping — allow it and press “Refresh now”.</div>');
+ return rows}
+function showSyncDiag(errors,aggregate){
+ const box=$('syncDiag');if(!box)return;
+ const msgs=[];
+ if(aggregate)msgs.push('Sync aborted before any city request: '+(aggregate.message||aggregate));
+ if(navigator.onLine===false)msgs.push('This device reports NO internet connection — reconnect, then press “Refresh now”.');
+ const uniq=[...new Set((errors||[]).map(e=>String(e).replace(/^[^:]+:\s*/,'')))].slice(0,3);
+ uniq.forEach(m=>msgs.push('City request error — '+m));
+ let hint='';
+ const all=uniq.join(' ');
+ if(/Failed to fetch|NetworkError|Load failed|abort/i.test(all))
+  hint='The requests never leave the browser. Usual causes: no internet, an ad-blocker / privacy extension or VPN blocking api.open-meteo.com, a corporate firewall, or the page being opened inside an app preview (chat app, IDE viewer) without network access. Open the file directly in Chrome / Edge / Firefox.';
+ else if(/HTTP 429/.test(all))
+  hint='Open-Meteo is rate-limiting this network/IP (HTTP 429). The free per-IP quota is 600 calls/minute, 5,000/hour and 10,000/day — shared by everyone behind the same connection (office, campus or mobile-carrier NAT/VPN). CascadeAI now uses one national request, then automatically fails over to another endpoint/provider while preserving the last successful snapshot.';
+ else if(/HTTP 5\d\d/.test(all))
+  hint='A weather provider reported a temporary server-side problem. CascadeAI tries the next provider and retries automatically.';
+ else if(!uniq.length&&!aggregate)
+  hint='The sync returned no usable data. Press “Run connection self-test” below to pinpoint the cause.';
+ box.classList.remove('hidden');
+ const body=$('diagBody');if(body)body.innerHTML=
+  msgs.map(m=>'<div style="margin:3px 0">• '+esc(m)+'</div>').join('')+
+  (hint?'<div class="err" style="margin-top:8px">'+esc(hint)+'</div>':'');
+}
+function hideSyncDiag(){const b=$('syncDiag');if(b)b.classList.add('hidden')}
+function tickCountdown(){const el=$('countdownPill');if(!el)return;
+ const sec=Math.max(0,Math.floor((S.nextRefreshAt-Date.now())/1000));
+ el.textContent=`Auto ${String(Math.floor(sec/60)).padStart(2,'0')}:${String(sec%60).padStart(2,'0')}`}
+function startScheduler(){   /* exactly ONE setTimeout chain + ONE countdown interval */
+ if(S.autoTimer)return;
+ const loop=async()=>{S.autoTimer=setTimeout(loop,REFRESH_MS);S.nextRefreshAt=Date.now()+REFRESH_MS;await refreshNow()};
+ S.nextRefreshAt=Date.now()+REFRESH_MS;
+ S.autoTimer=setTimeout(loop,REFRESH_MS);
+ if(!S.countTimer)S.countTimer=setInterval(tickCountdown,1000);
+ tickCountdown();
+}
+function publishWeatherUpdate(){
+ updateHeader();updateHome();
+ switch(S.activeFeature){
+  case 'weather':updateWeatherView();break;
+  case 'map':updateMapView();break;
+  case 'graph':updateGraphView();break;
+  case 'cascade':updateCascadeView();break;
+  case 'ranking':updateRankingView();break;
+  case 'routing':updateRouteView();break;
+  case 'voice':updateVoiceContext();break;
+ }
+ if(S.activeFeature){document.querySelectorAll('#featureContent [data-livecard]').forEach(el=>{
+  el.classList.remove('flash');void el.offsetWidth;el.classList.add('flash')})}
+}
+function updateHeader(){const c=selectedCity(),el=$('cityPillText');
+ if(el)el.textContent=`${c.name} • ${c.state}`}
+function setCity(id){
+ const c=cityById(id);if(!c)return;
+ const changed=id!==S.selectedCityId;
+ S.selectedCityId=id;S.lastCityMentioned=id;
+ updateHeader();
+ if(!changed)return;
+ switch(S.activeFeature){
+  case 'weather':updateWeatherView(true);break;
+  case 'map':updateMapSelection();renderMapPanel();renderCityList();break;
+  case 'graph':S.graphOffset=0;updateGraphView(true);break;
+  case 'cascade':updateCascadeView();break;
+  case 'ranking':updateRankingHighlight();break;
+  case 'routing':break; /* route selections deliberately stay as the user set them */
+  case 'voice':updateVoiceContext();break;
+ }
+}
+
+/* ============================ 7. NAVIGATION & GLOBAL EVENTS ============================ */
+function openFeature(key){
+ if(!FEATURES[key])return;
+ stopVoiceHard();destroyMaps();
+ S.activeFeature=key;
+ $('homeView').classList.add('hidden');
+ $('featureView').classList.remove('hidden');
+ const f=FEATURES[key];
+ $('fTitle').textContent=f.title;$('fSub').textContent=f.sub;$('fTags').innerHTML=featureTagsHtml(key);
+ renderFeature(key);
+ window.scrollTo({top:0,behavior:'auto'});
+}
+function goHome(){
+ stopVoiceHard();destroyMaps();
+ S.activeFeature=null;
+ $('featureView').classList.add('hidden');
+ $('homeView').classList.remove('hidden');
+ updateHome();
+ window.scrollTo({top:0,behavior:'auto'});
+}
+function renderFeature(key){
+ const fn={map:renderMapView,weather:renderWeatherView,graph:renderGraphView,cascade:renderCascadeView,
+  ranking:renderRankingView,routing:renderRouteView,voice:renderVoiceView}[key];
+ if(fn)fn();
+}
+function destroyMaps(){
+ if(LM.india){try{LM.india.remove()}catch(e){}LM.india=null;LM.indiaMarkers.clear();S.mapReady=false}
+ if(LM.route){try{LM.route.remove()}catch(e){}LM.route=null;LM.routeLayer=null}
+}
+function stopVoiceHard(){ /* leaving Mitra Voice stops speech + mic immediately */
+ if(S.voice.recognizer){try{S.voice.recognizer.stop()}catch(e){}S.voice.recognizer=null}
+ S.voice.listening=false;
+ try{if('speechSynthesis' in window)window.speechSynthesis.cancel()}catch(e){}
+ const mb=$('micBtn');if(mb)mb.classList.remove('rec');
+ const sd=$('speakState');if(sd){sd.textContent='idle';sd.classList.remove('on')}
+}
+function wireGlobalEvents(){
+ document.addEventListener('click',e=>{
+  const el=e.target.closest('[data-action]');if(!el)return;
+  switch(el.dataset.action){
+   case 'open-feature':openFeature(el.dataset.feature);break;
+   case 'home':goHome();break;
+   case 'refresh':refreshNow();break;
+   case 'select-city':setCity(el.dataset.city);break;
+   case 'graph-win':setGraphWindow(el.dataset.win);break;
+   case 'rank-sort':S.rankSort=el.dataset.sort;renderRankingBody();updateRankSortUI();break;
+   case 'route-find':findRoute();break;
+   case 'route-swap':swapRouteSelection();break;
+   case 'voice-send':sendChat();break;
+   case 'voice-mic':toggleMic();break;
+   case 'ask':sendChat(el.dataset.ask);break;
+   case 'clear-search':{S.mapSearch='';const i=$('mapSearch');if(i)i.value='';renderCityList();break}
+   case 'diag-run':runSelfTest();break;
+  }
+ });
+ document.addEventListener('change',e=>{
+  const el=e.target;
+  if(el.id==='globalCitySelect')setCity(el.value);
+  else if(el.id==='routeFrom')S.route.from=el.value;
+  else if(el.id==='routeTo')S.route.to=el.value;
+  else if(el.id==='speakToggle'){S.voice.speak=el.checked;updateVoiceContext()}
+  else if(el.id==='mapSearch'){S.mapSearch=el.value;renderCityList()}
+ });
+ document.addEventListener('keydown',e=>{
+  if(e.key==='Escape'&&S.activeFeature&&!/^(INPUT|SELECT|TEXTAREA)$/.test((document.activeElement&&document.activeElement.tagName)||''))goHome();
+  if(e.key==='Enter'&&e.target&&e.target.id==='chatInput'){e.preventDefault();sendChat()}
+ });
+ window.addEventListener('resize',debounce(()=>{
+  try{if(LM.india)LM.india.invalidateSize({animate:false})}catch(e){}
+  try{if(LM.route)LM.route.invalidateSize({animate:false})}catch(e){}
+ },180));
+ window.addEventListener('pagehide',stopVoiceHard);
+}
+
+/* ============================ 8. HOME (MITRA CORE) ============================ */
+function setTxt(id,v){const e=$(id);if(e)e.textContent=v}
+function updateHome(){
+ const w=selectedWeather();
+ setTxt('fmWri',w?Math.round(w.comp.wri):'—');
+ setTxt('fmBand',w?`${riskBand(w.comp.wri).name} • ${weatherText(w.code)}`:'awaiting first sync');
+ setTxt('fmTemp',(w&&Number.isFinite(w.temp))?`${Math.round(w.temp)}°C`:'—');
+ setTxt('fmCond',w?`feels like ${fmt(w.apparent,0)}°C`:'—');
+ setTxt('fmCities',`${S.weather.size} / ${CITY_NODES.length}`);
+ setTxt('fmUpdated',S.lastUpdated?`updated ${fmtClock(S.lastUpdated)}`:'connecting…');
+ nationalPulse();
+}
+function nationalPulse(){
+ const arr=CITY_NODES.map(c=>({c,w:S.weather.get(c.id)})).filter(x=>x.w);
+ if(!arr.length)return;
+ const sorted=[...arr].sort((a,b)=>b.w.comp.wri-a.w.comp.wri),hi=sorted[0];
+ setTxt('npHigh',`${hi.c.name} — ${Math.round(hi.w.comp.wri)}`);
+ setTxt('npHighSub',`${hi.c.state} • ${riskBand(hi.w.comp.wri).name}`);
+ setTxt('npElevated',String(arr.filter(x=>x.w.comp.wri>=25).length));
+ setTxt('npElevatedSub',`of ${arr.length} live cities at WRI 25+`);
+ setTxt('npAvg',String(Math.round(arr.reduce((s,x)=>s+x.w.comp.wri,0)/arr.length)));
+ setTxt('npSync',S.lastUpdated?fmtClock(S.lastUpdated):'—');
+}
+/* ============================ 9. FEATURE: WEATHER & RISK ============================ */
+function citySelectHtml(){return `<div class="field"><label for="globalCitySelect">Selected city</label>
+ <select id="globalCitySelect">${CITY_NODES.map(c=>`<option value="${c.id}"${c.id===S.selectedCityId?' selected':''}>${esc(c.name)} — ${esc(c.state)}</option>`).join('')}</select></div>`}
+function mrow(a,b){return `<div class="mrow"><span class="sub">${a}</span><b>${b}</b></div>`}
+function metricCard(label,value,sub){return `<div class="card" data-livecard><div class="label">${label}</div>
+ <div class="big">${value}</div><div class="sub">${sub}</div></div>`}
+function renderWeatherView(){
+ const c=$('featureContent'),w=selectedWeather(),city=selectedCity();
+ let body;
+ if(!w){
+  body=`<div class="grid g4">${['Temperature','Humidity','Precipitation','Wind'].map(l=>
+   `<div class="card"><div class="label">${l}</div><div class="skel" style="height:36px;width:110px;margin:8px 0"></div><div class="skel" style="height:12px;width:78%"></div></div>`).join('')}</div>
+   <div class="notice mt">The first live national sync is in progress — no placeholder weather is ever substituted.</div>`;
+ }else{
+  const b=riskBand(w.comp.wri);
+  const factors=factorList(w);
+  body=`<div class="grid g4">
+   ${metricCard('Temperature',`${fmt(w.temp,0)}<small>°C</small>`,`${weatherIcon(w.code)} ${weatherText(w.code)} • feels like ${fmt(w.apparent,0)}°C`)}
+   ${metricCard('Humidity',`${fmt(w.rh,0)}<small>%</small>`,'relative humidity, live')}
+   ${metricCard('Precipitation',`${fmt(w.precip,1)}<small> mm</small>`,`${fmt(w.precipProb,0)}% probability this hour`)}
+   ${metricCard('Wind',`${fmt(w.wind,0)}<small> km/h</small>`,`gusts to ${fmt(w.gust,0)} km/h`)}
+  </div>
+  <div class="grid g2 mt">
+   <div class="card" data-livecard>
+    <h3>${esc(city.name)} — calculated Weather Risk Index</h3>
+    <div style="display:flex;gap:20px;align-items:flex-start;flex-wrap:wrap">
+     <div style="width:148px;height:148px;border-radius:50%;flex:0 0 148px;display:grid;place-items:center;background:conic-gradient(${b.color} ${w.comp.wri*3.6}deg,rgba(255,255,255,.07) 0)">
+      <div style="width:110px;height:110px;border-radius:50%;display:grid;place-items:center;background:#061a20;text-align:center">
+       <div><b style="font-size:33px;font-family:var(--mono)">${Math.round(w.comp.wri)}</b><div class="sub" style="color:${b.color};font-weight:800">${b.name}</div></div>
+      </div>
+     </div>
+     <div style="flex:1;min-width:230px">
+      <div class="good"><b>Dominant driver:</b> ${esc(driverName(w))} (${Math.max(...factors.map(f=>f[1]))}/100)</div>
+      <div class="mt sub"><b style="color:var(--text)">Why this risk?</b></div>
+      ${explainRisk(w).map(t=>`<div class="sub" style="margin-top:6px">• ${esc(t)}</div>`).join('')}
+      ${sourceTag('CascadeAI risk engine','CALCULATED')}
+     </div>
+    </div>
+   </div>
+   <div class="card" data-livecard>
+    <h3>Current conditions detail</h3>
+    ${mrow('Visibility',Number.isFinite(w.visibility)?fmt(w.visibility/1000,1)+' km':'not reported by the model for this location')}
+    ${mrow('Pressure',fmt(w.pressure,0)+' hPa')}
+    ${mrow('Observation time',esc(hhmm(w.time))+' IST')}
+    ${mrow('Packet fetched',fmtClock(w.fetchedAt)+' (local)')}
+    <h3 class="mt">Next hours — live forecast strip</h3>
+    <div class="chips" style="margin-top:2px">${hourlyStrip(city.id)}</div>
+    ${sourceTag(providerName(w))}
+   </div>
+  </div>`;
+ }
+ c.innerHTML=`<div class="card selbar">${citySelectHtml()}
+  <div class="row-actions">
+   <button class="btn" type="button" data-action="open-feature" data-feature="map">📍 Locate on India map</button>
+   <button class="btn" type="button" data-action="open-feature" data-feature="graph">📈 Open risk graph</button>
+  </div></div>${body}`;
+}
+function hourlyStrip(cityId){
+ const s=hourlySeries(cityId,0).slice(0,8);
+ if(!s.length)return '<span class="sub">hourly data loading…</span>';
+ return s.map(p=>{const b=riskBand(p.wri);
+  return `<span class="chip" style="border-color:${b.color}66"><b style="color:${b.color}">${hhmm(p.time)}</b> ${fmt(p.temp,0)}°C · WRI ${Math.round(p.wri)}</span>`}).join('')}
+function updateWeatherView(force){renderWeatherView()} /* self-contained view: safe in-place re-render */
+
+/* ============================ 10. FEATURE: INDIA MAP (Leaflet + key-free basemaps) ============================ */
+function ensureLeaflet(){
+ if(window.L)return Promise.resolve(true);
+ if(ensureLeaflet._p)return ensureLeaflet._p;
+ ensureLeaflet._p=new Promise((resolve,reject)=>{
+  ['https://unpkg.com/leaflet@1.9.4/dist/leaflet.css','https://cdn.jsdelivr.net/npm/leaflet@1.9.4/dist/leaflet.css','https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.css']
+   .forEach(u=>{if(!document.querySelector(`link[href="${u}"]`)){const l=document.createElement('link');l.rel='stylesheet';l.href=u;document.head.appendChild(l)}});
+  const js=['https://unpkg.com/leaflet@1.9.4/dist/leaflet.js','https://cdn.jsdelivr.net/npm/leaflet@1.9.4/dist/leaflet.js','https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.js'];
+  (async()=>{for(const u of js){
+   try{await new Promise((res,rej)=>{const sc=document.createElement('script');sc.src=u;sc.onload=res;sc.onerror=rej;document.head.appendChild(sc)});
+    if(window.L){resolve(true);return}}catch(e){}
+  }reject(new Error('Leaflet CDN unavailable'))})();
+ });
+ return ensureLeaflet._p;
+}
+/* Key-free basemap providers with automatic failover. No API keys, ever.
+   Every provider below was empirically verified to serve REAL tiles without
+   keys or origin blocks. CARTO's basemaps CDN was removed: it now returns
+   200-OK watermark tiles reading "API KEY REQUIRED" — a banned failure class.
+   The volunteer tile.openstreetmap.fr family was demoted/removed as well: it
+   403-blocks some hosting origins (osm.wiki/Blocked). Final fallback is a
+   synthetic in-canvas command grid, so the map can never display blocked-tile
+   images, API-key watermarks or an empty void: markers always stay live. */
+const TILE_PROVIDERS=[
+ {name:'Esri Dark Gray Canvas',url:'https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Dark_Gray_Base/MapServer/tile/{z}/{y}/{x}',
+  opts:{maxZoom:19,maxNativeZoom:16,attribution:'Tiles &copy; Esri &mdash; Esri, DeLorme, NAVTEQ'}},
+ {name:'Esri World Imagery',url:'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',
+  opts:{maxZoom:19,attribution:'Imagery &copy; Esri &mdash; Esri, Maxar, Earthstar Geographics'}},
+ {name:'OSM Germany (FOSSGIS)',url:'https://tile.openstreetmap.de/{z}/{x}/{y}.png',
+  opts:{maxZoom:18,attribution:'&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors &middot; FOSSGIS'}},
+ {name:'OpenTopoMap',url:'https://tile.opentopomap.org/{z}/{x}/{y}.png',
+  opts:{maxZoom:17,maxNativeZoom:16,attribution:'&copy; OpenStreetMap contributors &middot; OpenTopoMap (CC-BY-SA)'}},
+ {name:'OpenStreetMap',url:'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
+  opts:{maxZoom:19,attribution:'&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'}}
+];
+/* Synthetic basemap is built lazily: Leaflet itself loads asynchronously. */
+let SYNTH_CLASS=null;
+function syntheticGridClass(){
+ if(SYNTH_CLASS)return SYNTH_CLASS;
+ SYNTH_CLASS=L.GridLayer.extend({
+  createTile(){
+   const s=256,t=document.createElement('canvas');t.width=s;t.height=s;
+   const g=t.getContext('2d');
+   g.fillStyle='#07161f';g.fillRect(0,0,s,s);
+   g.strokeStyle='rgba(47,230,200,.06)';g.lineWidth=1;
+   for(let i=0;i<=s;i+=32){g.beginPath();g.moveTo(i+.5,0);g.lineTo(i+.5,s);g.stroke();g.beginPath();g.moveTo(0,i+.5);g.lineTo(s,i+.5);g.stroke()}
+   g.strokeStyle='rgba(47,230,200,.15)';
+   for(let i=0;i<=s;i+=128){g.beginPath();g.moveTo(i+.5,0);g.lineTo(i+.5,s);g.stroke();g.beginPath();g.moveTo(0,i+.5);g.lineTo(s,i+.5);g.stroke()}
+   g.strokeStyle='rgba(47,230,200,.12)';
+   for(let x=0;x<=s;x+=128)for(let y=0;y<=s;y+=128){g.beginPath();g.moveTo(x-4.5,y+.5);g.lineTo(x+4.5,y+.5);g.stroke();g.beginPath();g.moveTo(x+.5,y-4.5);g.lineTo(x+.5,y+4.5);g.stroke()}
+   g.strokeStyle='rgba(47,230,200,.18)';g.strokeRect(.5,.5,s-1,s-1);
+   return t;
+  }
+ });
+ return SYNTH_CLASS;
+}
+function attachTiles(map,statusEl){
+ let idx=0,layer=null,synth=null,dead=false,ok=0,bad=0,timer=null;
+ const status=t=>{const el=statusEl||$('mapStatus');if(el)el.textContent=t};
+ const clearTimer=()=>{if(timer){clearTimeout(timer);timer=null}};
+ const detach=()=>{
+  if(layer){try{map.removeLayer(layer)}catch(e){}layer=null}
+  if(synth){try{map.removeLayer(synth)}catch(e){}synth=null}};
+ const goSynthetic=()=>{
+  if(dead)return;dead=true;clearTimer();detach();
+  try{synth=new (syntheticGridClass())({minZoom:3,maxZoom:18,attribution:'CascadeAI synthetic grid &mdash; offline basemap'}).addTo(map)}catch(e){}
+  status('Basemap CDNs are unreachable on this network — CascadeAI grid canvas engaged. All 57 city risk markers remain live and interactive.');};
+ const attach=()=>{
+  if(dead)return;
+  if(idx>=TILE_PROVIDERS.length){goSynthetic();return}
+  clearTimer();detach();
+  const p=TILE_PROVIDERS[idx];ok=0;bad=0;
+  status(`Connecting ${p.name} tiles…`);
+  layer=L.tileLayer(p.url,Object.assign({},p.opts,{detectRetina:false,keepBuffer:2}));
+  layer.on('tileload',()=>{ok++;bad=0});
+  layer.on('load',()=>{if(ok>0){clearTimer();status(`${p.name} connected • Leaflet`)}});
+  layer.on('tileerror',()=>{bad++;
+   if((ok<3&&bad>=6)||(ok>=3&&bad>=24)){idx++;attach()}});
+  layer.addTo(map);
+  timer=setTimeout(()=>{if(ok===0&&!dead){idx++;attach()}},8000);
+ };
+ attach();
+}
+function buildMap(containerId,statusEl){
+ const map=L.map(containerId,{zoomControl:true,attributionControl:true,preferCanvas:false,minZoom:4,maxZoom:18,
+  worldCopyJump:true,maxBounds:[[-12,38],[48,112]],maxBoundsViscosity:.7});
+ attachTiles(map,typeof statusEl==='string'?$(statusEl):statusEl);
+ setTimeout(()=>{try{map.invalidateSize(true)}catch(e){}},120);
+ setTimeout(()=>{try{map.invalidateSize(true)}catch(e){}},600);
+ return map;
+}
+function cityIcon(score,sel){
+ const b=riskBand(score);
+ return L.divIcon({className:'cm-icon'+(sel?' cm-sel':''),
+  html:`<div class="pin" style="--c:${b.color}"></div>`,iconSize:[34,34],iconAnchor:[17,17],popupAnchor:[0,-16]})}
+function labelHtml(city,w,sel){
+ const s=(w&&Number.isFinite(w.comp.wri))?Math.round(w.comp.wri):null;
+ const b=s!=null?riskBand(s):null;
+ return `<b>${esc(city.name)}</b>${s!=null?` <span style="color:${b.color}">• WRI ${s}${sel?' ★':''}</span>`:''}`}
+function renderMapView(){
+ const c=$('featureContent');
+ c.innerHTML=`<div class="grid mapgrid">
+  <div class="card" data-livecard>
+   <div style="display:flex;justify-content:space-between;gap:12px;align-items:center;flex-wrap:wrap;margin-bottom:10px">
+    <div><h3 style="margin:0 0 4px">Live national weather-risk map</h3>
+     <div class="sub">Two major cities per state plus Delhi. Click any marker to switch the whole platform to that city. Labels appear as you zoom in.</div></div>
+    <button class="btn" type="button" data-action="refresh">↻ Refresh live weather</button>
+   </div>
+   <div class="mapbox" id="indiaMap"><div class="map-loading">Opening India map…</div></div>
+   <div class="map-status" id="mapStatus">Connecting Leaflet basemap…</div>
+   ${sourceTag('Leaflet • key-free basemaps','MAP')}${sourceTag('Open-Meteo live risk state')}
+  </div>
+  <div class="card">
+   <div id="mapPanel"></div>
+   <div class="field mt"><label for="mapSearch">Find a city</label>
+    <input id="mapSearch" type="search" placeholder="Search city or state…" value="${esc(S.mapSearch)}" autocomplete="off"/></div>
+   <div class="citylist" id="cityList" aria-label="All national city nodes"></div>
+  </div>
+ </div>`;
+ renderCityList();renderMapPanel();
+ initIndiaMap();
+}
+function renderMapPanel(){
+ const e=$('mapPanel');if(!e)return;
+ const city=selectedCity(),w=selectedWeather();
+ if(!w){e.innerHTML=`<h3>${esc(city.name)} — ${esc(city.state)}</h3><div class="notice">Live data for this city arrives with the next national sync. No placeholder values are shown.</div>`;return}
+ const b=riskBand(w.comp.wri);
+ e.innerHTML=`<h3 style="display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap">
+   ${esc(city.name)} <span class="badge" style="background:${b.color}22;color:${b.color};border:1px solid ${b.color}66">${b.name}</span></h3>
+  <div class="sub" style="margin-bottom:6px">${esc(city.state)} • national control context follows this selection</div>
+  ${mrow('Current WRI',`<span style="color:${b.color};font-family:var(--mono);font-weight:700">${Math.round(w.comp.wri)}</span>`)}
+  ${mrow('Weather',`${weatherIcon(w.code)} ${weatherText(w.code)}`)}
+  ${mrow('Temperature',`${fmt(w.temp,0)}°C (feels ${fmt(w.apparent,0)}°C)`)}
+  ${mrow('Wind',`${fmt(w.wind,0)} km/h • gust ${fmt(w.gust,0)}`)}
+  ${mrow('Updated',esc(hhmm(w.time))+' IST')}
+  <div class="row-actions mt"><button class="btn primary" type="button" data-action="open-feature" data-feature="weather">Open full city panel</button></div>`;
+}
+function renderCityList(){
+ const e=$('cityList');if(!e)return;
+ const q=S.mapSearch.trim().toLowerCase();
+ const sorted=[...CITY_NODES].sort((a,b)=>a.state.localeCompare(b.state)||a.name.localeCompare(b.name));
+ const rows=sorted.filter(cc=>!q||cc.name.toLowerCase().includes(q)||cc.state.toLowerCase().includes(q)).map(cc=>{
+  const w=S.weather.get(cc.id),s=w?Math.round(w.comp.wri):null,col=s!=null?riskBand(s).color:'#5e828b';
+  return `<button class="city-item${cc.id===S.selectedCityId?' active':''}" type="button" data-action="select-city" data-city="${cc.id}">
+   <span class="tiny-dot" style="background:${col};color:${col}"></span>
+   <span><b>${esc(cc.name)}</b><small>${esc(cc.state)}</small></span>
+   <b class="cnum" style="color:${col}">${s!=null?s:'—'}</b></button>`}).join('');
+ e.innerHTML=rows||'<div class="notice">No city matches that search.</div>';
+}
+async function initIndiaMap(){
+ const box=$('indiaMap');if(!box)return;
+ try{await ensureLeaflet()}catch(e){
+  box.innerHTML='<div style="position:absolute;inset:0;display:grid;place-items:center;padding:20px"><div class="notice">Map libraries are unreachable right now. Live weather and city risk data remain fully available — the map reconnects the next time you open this page.</div></div>';
+  const st=$('mapStatus');if(st)st.textContent='Leaflet reconnecting…';
+  return;
+ }
+ try{if(LM.india)LM.india.remove()}catch(e){}
+ LM.india=null;LM.indiaMarkers.clear();
+ box.innerHTML='';
+ const map=buildMap('indiaMap','mapStatus');
+ LM.india=map;
+ map.fitBounds([[6.8,67.5],[37.2,97.2]],{padding:[24,24]});
+ CITY_NODES.forEach(city=>{
+  const w=S.weather.get(city.id),score=w?Math.round(w.comp.wri):0;
+  const m=L.marker([city.lat,city.lon],{icon:cityIcon(score,city.id===S.selectedCityId),keyboard:true,
+   title:`${city.name} — ${city.state}`}).addTo(map);
+  m.bindTooltip(labelHtml(city,w,city.id===S.selectedCityId),
+   {className:'city-label',direction:'top',offset:[0,-13],permanent:true,opacity:1});
+  m.bindPopup('');
+  m.on('click',()=>{fillCityPopup(m,city);setCity(city.id)});
+  LM.indiaMarkers.set(city.id,m);
+ });
+ applyLabelVisibility();
+ map.on('zoomend',applyLabelVisibility);
+ setTimeout(()=>{try{map.invalidateSize(true)}catch(e){}},260);
+ S.mapReady=true;
+}
+function fillCityPopup(m,city){
+ const w=S.weather.get(city.id);
+ const s=(w&&Number.isFinite(w.comp.wri))?Math.round(w.comp.wri):null;
+ const b=s!=null?riskBand(s):null;
+ m.setPopupContent(`<b style="font-size:13.5px">${esc(city.name)}</b> <span style="color:#8fc0c9">· ${esc(city.state)}</span><br>
+  ${s!=null?`WRI <b style="color:${b.color};font-family:var(--mono)">${s} · ${b.name}</b><br>`:'<span style="color:#8fc0c9">risk loads with the next sync</span><br>'}
+  ${w?`${weatherIcon(w.code)} ${weatherText(w.code)} • ${fmt(w.temp,0)}°C (feels ${fmt(w.apparent,0)}°C)<br>💧 ${fmt(w.rh,0)}% · 💨 ${fmt(w.wind,0)} km/h · 🌧 ${fmt(w.precipProb,0)}%<br><span style="color:#6f98a1;font-size:10px">Updated ${esc(hhmm(w.time))} IST • LIVE • ${esc(providerName(w))}</span>`:'<span style="color:#8fc0c9">Awaiting live packet…</span>'}`);
+ m.openPopup();
+}
+function applyLabelVisibility(){
+ if(!LM.india)return;
+ let z=5;try{z=LM.india.getZoom()}catch(e){}
+ LM.indiaMarkers.forEach((m,id)=>{
+  let open=false;try{open=m.isTooltipOpen()}catch(e){}
+  const show=z>=6||id===S.selectedCityId;
+  if(show&&!open){try{m.openTooltip()}catch(e){}}
+  if(!show&&open){try{m.closeTooltip()}catch(e){}}
+ });
+}
+function updateMapSelection(){
+ if(!LM.india)return;
+ LM.indiaMarkers.forEach((m,id)=>{
+  const w=S.weather.get(id),score=w?Math.round(w.comp.wri):0;
+  const sel=id===S.selectedCityId;
+  m.setIcon(cityIcon(score,sel));
+  const tt=m.getTooltip();
+  if(tt)tt.setContent(labelHtml(cityById(id),w,sel));
+ });
+ applyLabelVisibility();
+}
+function updateMapView(){
+ if(S.activeFeature!=='map')return;
+ if(LM.india){
+  LM.indiaMarkers.forEach((m,id)=>{
+   const w=S.weather.get(id),s=w?Math.round(w.comp.wri):0;
+   m.setIcon(cityIcon(s,id===S.selectedCityId));
+   const tt=m.getTooltip();if(tt)tt.setContent(labelHtml(cityById(id),w,id===S.selectedCityId));
+  });
+  applyLabelVisibility();
+ }
+ renderMapPanel();renderCityList();
+}
+/* ============================ 11. FEATURE: CITY RISK GRAPH (SVG) ============================
+   Every city has its own series built from ITS OWN live hourly packet. */
+function hourlySeries(cityId,offsetUnits){
+ const w=S.weather.get(cityId);
+ if(!w||!w.hourly||!Array.isArray(w.hourly.time))return[];
+ const h=w.hourly,ci=w.hourlyIndex||0;
+ const start=Math.max(0,Math.min(ci+offsetUnits*HOUR_WINDOW,h.time.length-1));
+ const out=[];
+ for(let i=start;i<Math.min(start+HOUR_WINDOW,h.time.length);i++){
+  const o={temp:num(h.temperature_2m[i]),apparent:num(h.apparent_temperature[i]),rh:num(h.relative_humidity_2m[i]),
+   precip:num(h.precipitation[i])||0,precipProb:num(h.precipitation_probability[i])||0,
+   code:num(h.weather_code[i]),wind:num(h.wind_speed_10m[i])||0,gust:num(h.wind_gusts_10m[i])||0,
+   visibility:num((h.visibility||[])[i])};
+  const rec=Object.assign({time:h.time[i]},o);rec.wri=computeComponents(o).wri;
+  out.push(rec);
+ }
+ return out;
+}
+function graphRange(){
+ const w=S.weather.get(S.selectedCityId);
+ if(!w||!w.hourly)return{min:0,max:0};
+ const ci=w.hourlyIndex||0,n=w.hourly.time.length;
+ return{min:(ci-HOUR_WINDOW>=0)?-1:0,max:Math.max(0,Math.floor((n-1-(ci+HOUR_WINDOW-1))/HOUR_WINDOW))};
+}
+function setGraphWindow(winStr){
+ const win=parseInt(winStr,10)||0;const r=graphRange();
+ if(win<0)S.graphOffset=Math.max(r.min,S.graphOffset-1);
+ else if(win>0)S.graphOffset=Math.min(r.max,S.graphOffset+1);
+ else S.graphOffset=0;
+ renderGraphView();
+}
+const G={last:null};
+function graphSvg(cityId){
+ const series=hourlySeries(cityId,S.graphOffset);
+ if(!series.length)return '<div class="notice">Hourly data for this window is still loading — the next national sync will fill this graph.</div>';
+ const W=1000,H=450,pl=56,pr=20,pt=30,pb=52;
+ const iw=W-pl-pr,ih=H-pt-pb;
+ const X=i=>pl+(series.length===1?iw/2:(i/(series.length-1))*iw);
+ const Y=v=>pt+ih-(clamp(v)/100)*ih;
+ const lows=[0,25,50,75];
+ const stripes=BANDS.map((b,i)=>
+  `<rect x="${pl}" y="${Y(lows[i]+25).toFixed(1)}" width="${iw}" height="${(Y(lows[i])-Y(lows[i]+25)).toFixed(1)}" fill="${b.color}" opacity="0.05"/>
+   <text x="${(pl+iw-8)}" y="${Y(lows[i]+13).toFixed(1)}" text-anchor="end" fill="${b.color}" font-size="9" opacity=".75" letter-spacing="1.4">${b.name}</text>`).join('');
+ const grid=[0,25,50,75,100].map(v=>
+  `<line x1="${pl}" y1="${Y(v).toFixed(1)}" x2="${pl+iw}" y2="${Y(v).toFixed(1)}" stroke="#173a43" stroke-width="1"/>
+   <text x="${pl-10}" y="${(Y(v)+4).toFixed(1)}" fill="#6f99a2" font-size="10" text-anchor="end" font-family="var(--mono)">${v}</text>`).join('');
+ const ptsArr=series.map((p,i)=>[X(i),Y(p.wri)]);
+ const area=`M${ptsArr[0][0].toFixed(1)},${Y(0).toFixed(1)} `+ptsArr.map((p,i)=>`L${p[0].toFixed(1)},${p[1].toFixed(1)}`).join(' ')+` L${ptsArr[ptsArr.length-1][0].toFixed(1)},${Y(0).toFixed(1)} Z`;
+ const segs=ptsArr.slice(1).map((p,i)=>{
+  const prev=series[i];return `<line x1="${ptsArr[i][0].toFixed(1)}" y1="${ptsArr[i][1].toFixed(1)}" x2="${p[0].toFixed(1)}" y2="${p[1].toFixed(1)}" stroke="${riskBand(prev.wri).color}" stroke-width="3" stroke-linecap="round"/>`}).join('');
+ const dots=series.map((p,i)=>{const b=riskBand(p.wri);
+  return `<circle cx="${ptsArr[i][0].toFixed(1)}" cy="${ptsArr[i][1].toFixed(1)}" r="4.6" fill="${b.color}" stroke="#06131a" stroke-width="1.6"><title>${hhmm(p.time)} IST — WRI ${Math.round(p.wri)} ${b.name} · ${fmt(p.temp,0)}°C</title></circle>`}).join('');
+ const xlabels=series.map((p,i)=>`<text x="${ptsArr[i][0].toFixed(1)}" y="${H-18}" fill="#729ba3" font-size="10" text-anchor="middle" font-family="var(--mono)">${hhmm(p.time)}</text>`).join('');
+ const now=(S.graphOffset===0)?`
+  <line x1="${ptsArr[0][0].toFixed(1)}" y1="${pt}" x2="${ptsArr[0][0].toFixed(1)}" y2="${pt+ih}" stroke="#2fe6c8" stroke-width="1.2" stroke-dasharray="4 6" opacity=".8"/>
+  <circle cx="${ptsArr[0][0].toFixed(1)}" cy="${ptsArr[0][1].toFixed(1)}" r="9" fill="none" stroke="#2fe6c8" stroke-width="1.6" opacity=".9"><animate attributeName="r" values="7;12;7" dur="2.4s" repeatCount="indefinite"/><animate attributeName="opacity" values=".9;.25;.9" dur="2.4s" repeatCount="indefinite"/></circle>
+  <text x="${(ptsArr[0][0]+6).toFixed(1)}" y="${pt+14}" fill="#2fe6c8" font-size="10" font-weight="800" letter-spacing="1.4">NOW</text>`:'';
+ G.last={series,X,Y,W,H,pl,pr};
+ return `<svg class="gsvg" viewBox="0 0 ${W} ${H}" role="img" aria-label="Ten hour weather risk graph for ${esc(selectedCity().name)}">
+  <defs><linearGradient id="ggrad" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#2fe6c8" stop-opacity=".3"/><stop offset="1" stop-color="#2fe6c8" stop-opacity="0"/></linearGradient></defs>
+  ${stripes}${grid}<path d="${area}" fill="url(#ggrad)"/>${segs}${dots}${now}${xlabels}
+  <rect x="${pl}" y="${pt}" width="${iw}" height="${ih}" fill="transparent" id="ghover"/>
+ </svg>`;
+}
+function graphStatsHtml(series){
+ if(!series.length)return'';
+ const vals=series.map(p=>p.wri);
+ const peak=series[vals.indexOf(Math.max(...vals))],low=series[vals.indexOf(Math.min(...vals))];
+ const avg=Math.round(vals.reduce((a,b)=>a+b,0)/vals.length);
+ const maxRain=Math.max(...series.map(p=>Number.isFinite(p.precipProb)?p.precipProb:0));
+ return `<span class="chip">window avg <b>${avg}</b></span>
+  <span class="chip">peak <b style="color:${riskBand(peak.wri).color}">${Math.round(peak.wri)}</b> @ ${hhmm(peak.time)}</span>
+  <span class="chip">low <b style="color:${riskBand(low.wri).color}">${Math.round(low.wri)}</b> @ ${hhmm(low.time)}</span>
+  <span class="chip">max rain prob <b>${Math.round(maxRain)}%</b></span>`;
+}
+function renderGraphView(){
+ const c=$('featureContent'),city=selectedCity(),r=graphRange();
+ c.innerHTML=`<div class="card selbar">${citySelectHtml()}
+  <div class="winbtns"><span class="label">Window</span>
+   <button class="btn" type="button" data-action="graph-win" data-win="-1" ${S.graphOffset<=r.min?'disabled':''}>◀ Prev window</button>
+   <button class="btn" type="button" data-action="graph-win" data-win="0" ${S.graphOffset===0?'disabled':''}>● Current</button>
+   <button class="btn" type="button" data-action="graph-win" data-win="1" ${S.graphOffset>=r.max?'disabled':''}>Next window ▶</button>
+  </div></div>
+ <div class="card" data-livecard>
+  <div style="display:flex;justify-content:space-between;gap:12px;flex-wrap:wrap;align-items:flex-end;margin-bottom:8px">
+   <div><h3 style="margin:0" id="graphTitle"></h3><div class="sub" id="graphSub"></div></div>
+   <div class="chips" style="margin:0" id="graphStats"></div>
+  </div>
+  <div class="gwrap" id="gwrap">${graphSvg(city.id)}</div>
+  <div class="legend" style="margin-top:10px">${BANDS.map(b=>`<span class="lchip"><i style="background:${b.color}"></i>${b.name} ≤ ${b.max}</span>`).join('')}
+   <span style="margin-left:auto">${sourceTag(providerName(selectedWeather())+' + CascadeAI risk engine','CALCULATED')}</span></div>
+ </div>`;
+ wireGraphTooltip();updateGraphHeader();
+}
+function updateGraphHeader(){
+ const series=hourlySeries(S.selectedCityId,S.graphOffset);
+ const t=$('graphTitle'),sb=$('graphSub'),st=$('graphStats');
+ if(t)t.textContent=`${selectedCity().name}, ${selectedCity().state} — Weather Risk Index`;
+ if(sb)sb.textContent=series.length?`Each point is recalculated from the active provider forecast. Window: ${hhmm(series[0].time)} → ${hhmm(series[series.length-1].time)} IST`:'waiting for the next national sync';
+ if(st)st.innerHTML=graphStatsHtml(series);
+}
+function wireGraphTooltip(){
+ const wrap=$('gwrap'),svg=wrap&&wrap.querySelector('svg');if(!wrap||!svg)return;
+ const tip=document.createElement('div');tip.className='gtip';wrap.appendChild(tip);
+ svg.addEventListener('mousemove',e=>{
+  if(!G.last||!G.last.series.length)return;
+  const g=G.last,r=svg.getBoundingClientRect();
+  const vx=(e.clientX-r.left)*(g.W/r.width);
+  const iw=g.W-g.pl-g.pr;
+  let i=Math.round(((vx-g.pl)/iw)*(g.series.length-1));
+  i=Math.max(0,Math.min(g.series.length-1,i));
+  const p=g.series[i],b=riskBand(p.wri);
+  tip.innerHTML=`<b>${hhmm(p.time)} IST</b><br>WRI <b style="color:${b.color}">${Math.round(p.wri)} · ${b.name}</b><br><span style="color:#9fc6cd">${fmt(p.temp,0)}°C · 💧 ${fmt(p.precipProb,0)}% · 💨 ${fmt(p.wind,0)} km/h</span>`;
+  tip.style.left=((g.X(i)/g.W)*r.width)+'px';
+  tip.style.top=((g.Y(p.wri)/g.H)*r.height)+'px';
+  tip.style.opacity='1';
+ });
+ svg.addEventListener('mouseleave',()=>{tip.style.opacity='0'});
+}
+function updateGraphView(){renderGraphView()}
+
+/* ============================ 12. FEATURE: CASCADE NETWORK (SVG spiral) ============================
+   MODELLED relationships: state membership + nearest geographic neighbours.
+   The spiral is geometrically centred on the CascadeAI core. */
+const CASC={pts:[],edges:[],W:1560,H:980,cx:780,cy:490};
+function cascadeInit(){
+ if(CASC.pts.length)return;
+ const n=CITY_NODES.length,t0=-Math.PI/2+0.35;
+ for(let i=0;i<n;i++){
+  const t=t0+i*0.615,r=150+i*8.6;
+  CASC.pts.push({x:CASC.cx+r*Math.cos(t),y:CASC.cy+r*0.615*Math.sin(t),city:CITY_NODES[i]});
+ }
+ const seen=new Set();
+ const add=(a,b,type)=>{if(a.id===b.id)return;const k=[a.id,b.id].sort().join('|');
+  if(seen.has(k))return;seen.add(k);
+  const A=CASC.pts.find(p=>p.city.id===a.id),B=CASC.pts.find(p=>p.city.id===b.id);
+  const mx=(A.x+B.x)/2,my=(A.y+B.y)/2,dx=B.x-A.x,dy=B.y-A.y,len=Math.hypot(dx,dy)||1,off=len*0.1;
+  const d=`M${A.x.toFixed(1)},${A.y.toFixed(1)} Q${(mx+(-dy/len)*off).toFixed(1)},${(my+(dx/len)*off).toFixed(1)} ${B.x.toFixed(1)},${B.y.toFixed(1)}`;
+  CASC.edges.push({a:a.id,b:b.id,type,d})};
+ for(let i=0;i<n-1;i++){if(CITY_NODES[i].state===CITY_NODES[i+1].state)add(CITY_NODES[i],CITY_NODES[i+1],'state')}
+ CITY_NODES.forEach(c=>nearestCities(c,2).forEach(nb=>add(c,nb,'geo')));
+}
+function spiralPath(pts){
+ let d=`M${pts[0].x.toFixed(1)},${pts[0].y.toFixed(1)}`;
+ for(let i=1;i<pts.length-1;i++){
+  const mx=((pts[i].x+pts[i+1].x)/2).toFixed(1),my=((pts[i].y+pts[i+1].y)/2).toFixed(1);
+  d+=` Q${pts[i].x.toFixed(1)},${pts[i].y.toFixed(1)} ${mx},${my}`;
+ }
+ const l=pts[pts.length-1];
+ return d+` T${l.x.toFixed(1)},${l.y.toFixed(1)}`;
+}
+function cascadeSvg(){
+ cascadeInit();
+ const {W,H,cx,cy,pts}=CASC,chain=spiralPath(pts);
+ const edges=CASC.edges.map(e=>
+  `<path class="cedge${e.a===S.selectedCityId||e.b===S.selectedCityId?' hi':''}" data-ea="${e.a}" data-eb="${e.b}" d="${e.d}" fill="none" stroke="${e.type==='state'?'#3d7683':'#2b5a64'}" stroke-width="${e.type==='state'?1.6:1.1}" opacity="${e.type==='state'?.5:.3}" stroke-dasharray="${e.type==='geo'?'5 6':'none'}"/>`).join('');
+ const nodes=pts.map(p=>{
+  const w=S.weather.get(p.city.id),score=w?Math.round(w.comp.wri):null;
+  const col=score!=null?riskBand(score).color:'#5e828b';
+  const sel=p.city.id===S.selectedCityId,r=sel?15:9,left=p.x<cx;
+  return `<g class="cnode" data-action="select-city" data-city="${p.city.id}" role="button" tabindex="0" aria-label="${esc(p.city.name)}, WRI ${score!=null?score:'loading'}">
+   <title>${esc(p.city.name)}, ${esc(p.city.state)} — WRI ${score!=null?score:'—'} ${score!=null?riskBand(score).name:''}</title>
+   <circle class="halo" cx="${p.x.toFixed(1)}" cy="${p.y.toFixed(1)}" r="${r+11}" fill="${col}" opacity="${sel?.26:.08}"/>
+   <circle cx="${p.x.toFixed(1)}" cy="${p.y.toFixed(1)}" r="${r}" fill="${col}" stroke="${sel?'#ffffff':'#06202a'}" stroke-width="${sel?3:2}"/>
+   <text class="cntxt" x="${(p.x+(left?-18:18)).toFixed(1)}" y="${(p.y-11).toFixed(1)}" text-anchor="${left?'end':'start'}" fill="${sel?'#ffffff':'#a8c9cf'}" font-size="${sel?13.5:10.5}" font-weight="${sel?800:600}">${esc(shortName(p.city.name,14))}</text>
+  </g>`}).join('');
+ const w0=selectedWeather(),score0=w0?Math.round(w0.comp.wri):null,b0=score0!=null?riskBand(score0):null;
+ return `<svg class="csvg" viewBox="0 0 ${W} ${H}" preserveAspectRatio="xMidYMid meet" role="img" aria-label="CascadeAI India national cascade spiral with 57 city nodes">
+  <defs>
+   <radialGradient id="coreG"><stop offset="0" stop-color="#134247"/><stop offset="1" stop-color="#071c24"/></radialGradient>
+   <linearGradient id="spirG" x1="0" x2="1"><stop offset="0" stop-color="#2fe6c8"/><stop offset=".5" stop-color="#4fa8ff"/><stop offset="1" stop-color="#b677ff"/></linearGradient>
+   <filter id="cglow" x="-40%" y="-40%" width="180%" height="180%"><feGaussianBlur stdDeviation="6" result="b"/><feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge></filter>
+  </defs>
+  ${[150,300,450,600].map(r=>`<circle cx="${cx}" cy="${cy}" r="${r}" fill="none" stroke="#16414c" stroke-dasharray="4 12" opacity=".55"/>`).join('')}
+  <path d="${chain}" fill="none" stroke="url(#spirG)" stroke-width="2.4" opacity=".28"/>
+  <path class="flowline" d="${chain}" fill="none" stroke="#2fe6c8" stroke-width="1.5" opacity=".5" stroke-dasharray="3 26"/>
+  ${edges}
+  <circle cx="${cx}" cy="${cy}" r="104" fill="url(#coreG)" stroke="#42efd3" stroke-width="2.4" filter="url(#cglow)"/>
+  <circle cx="${cx}" cy="${cy}" r="120" fill="none" stroke="#2a7c80" stroke-dasharray="4 10" opacity=".7"/>
+  <text x="${cx}" y="${cy-26}" text-anchor="middle" fill="#ffffff" font-size="23" font-weight="900" letter-spacing="2">CASCADEAI INDIA</text>
+  <text x="${cx}" y="${cy-3}" text-anchor="middle" fill="#74b9c4" font-size="10.5" letter-spacing="1.6">57 LIVE CITY NODES • MODELLED NETWORK</text>
+  <text x="${cx}" y="${cy+34}" text-anchor="middle" fill="${b0?b0.color:'#74b9c4'}" font-size="15" font-weight="800">${esc(selectedCity().name.toUpperCase())}${score0!=null?` • WRI ${score0} • ${b0.name}`:''}</text>
+  ${nodes}
+ </svg>`;
+}
+function statePartner(city){
+ const i=CITY_NODES.findIndex(x=>x.id===city.id);
+ if(i<0)return null;
+ const j=(i%2===0)?i+1:i-1;
+ return (CITY_NODES[j]&&CITY_NODES[j].state===city.state)?CITY_NODES[j]:null;
+}
+function linkItem(c){
+ const w=S.weather.get(c.id),s=w?Math.round(w.comp.wri):null,col=s!=null?riskBand(s).color:'#5e828b';
+ return `<button class="linkitem" type="button" data-action="select-city" data-city="${c.id}">
+  <span style="display:flex;align-items:center;gap:9px;min-width:0"><span class="tiny-dot" style="background:${col};color:${col};flex:0 0 10px"></span>
+  <span style="min-width:0"><b>${esc(c.name)}</b><small class="rstate">${esc(c.state)}</small></span></span>
+  <b class="cnum" style="color:${col}">${s!=null?s:'—'}</b></button>`;
+}
+function renderCascadeSide(){
+ const e=$('cascSide');if(!e)return;
+ const city=selectedCity(),w=selectedWeather(),b=w?riskBand(w.comp.wri):null;
+ const partner=statePartner(city),neigh=nearestCities(city,2);
+ e.innerHTML=`<h3>Selected node</h3>
+  <div style="display:flex;justify-content:space-between;align-items:center;gap:10px;margin-bottom:8px;flex-wrap:wrap">
+   <div><b style="font-size:16px">${esc(city.name)}</b><div class="sub">${esc(city.state)} • ${esc(city.region)} region</div></div>
+   ${b?`<span class="badge" style="background:${b.color}22;color:${b.color};border:1px solid ${b.color}66">WRI ${Math.round(w.comp.wri)} · ${b.name}</span>`:'<span class="chip">awaiting sync</span>'}
+  </div>
+  ${w?mrow('Weather',`${weatherIcon(w.code)} ${weatherText(w.code)}`)+mrow('Temp / wind',`${fmt(w.temp,0)}°C · ${fmt(w.wind,0)} km/h`)+mrow('Updated',esc(hhmm(w.time))+' IST'):''}
+  <h3 class="mt">Modelled connections</h3>
+  ${partner?linkItem(partner):`<div class="sub" style="margin-bottom:7px">${esc(city.name)} is the national control node — connected to every region of the network.</div>`}
+  ${neigh.map(linkItem).join('')}
+  <h3 class="mt">How to read this view</h3>
+  <div class="sub">Node colour is the city's calculated WRI band. Curved links are derived relationships — same-state pairs and nearest geographic neighbours — that cascade monitoring would follow. They are <b>MODELLED</b> exposure relationships, not observed infrastructure failures.</div>
+  <div class="row-actions mt"><button class="btn primary" type="button" data-action="open-feature" data-feature="weather">Open city panel</button>
+  <button class="btn" type="button" data-action="open-feature" data-feature="graph">Risk graph</button></div>`;
+}
+function renderCascadeView(){
+ cascadeInit();
+ const c=$('featureContent');
+ c.innerHTML=`<div class="grid cgrid">
+  <div class="card" data-livecard>
+   <div class="legend">${BANDS.map(b=>`<span class="lchip"><i style="background:${b.color}"></i>${b.name}</span>`).join('')}
+    <span style="margin-left:auto">${sourceTag('CascadeAI modelled network','MODELLED')}</span></div>
+   <div class="cwrap" id="cwrap">${cascadeSvg()}</div>
+   <div class="notice" style="margin-top:12px">Links are MODELLED from state membership, geographic proximity and regional adjacency — they represent exposure relationships for monitoring. No physical infrastructure failure is claimed or implied anywhere in this view.</div>
+  </div>
+  <div class="card" id="cascSide"></div>
+ </div>`;
+ renderCascadeSide();
+}
+function updateCascadeView(){
+ if(S.activeFeature!=='cascade')return;
+ const wrap=$('cwrap');
+ if(wrap)wrap.innerHTML=cascadeSvg();
+ renderCascadeSide();
+}
+/* ============================ 13. FEATURE: NATIONAL RANKING ============================ */
+function rankSorted(){
+ const arr=CITY_NODES.map(c=>({c,w:S.weather.get(c.id)})).filter(x=>x.w);
+ const byName=(a,b)=>a.c.name.localeCompare(b.c.name);
+ if(S.rankSort==='low')return arr.sort((a,b)=>a.w.comp.wri-b.w.comp.wri||byName(a,b));
+ if(S.rankSort==='alpha')return arr.sort(byName);
+ return arr.sort((a,b)=>b.w.comp.wri-a.w.comp.wri||byName(a,b));
+}
+function updateRankSortUI(){
+ document.querySelectorAll('[data-action="rank-sort"]').forEach(b=>b.classList.toggle('on',b.dataset.sort===S.rankSort));
+}
+function renderRankingBody(){
+ const tb=$('rankBody');if(!tb)return;
+ const rows=rankSorted();
+ if(!rows.length){tb.innerHTML='<tr><td colspan="7"><div class="notice">The live national ranking appears after the first successful weather sync — nothing is pre-filled.</div></td></tr>';return}
+ tb.innerHTML=rows.map((x,i)=>{
+  const w=x.w,s=Math.round(w.comp.wri),b=riskBand(s);
+  return `<tr data-action="select-city" data-city="${x.c.id}" tabindex="0" role="button" aria-label="Select ${esc(x.c.name)}" class="${x.c.id===S.selectedCityId?'active':''}">
+   <td class="cnum" style="color:${b.color};font-weight:700">#${i+1}</td>
+   <td><b>${esc(x.c.name)}</b><span class="rstate">${esc(x.c.state)}</span></td>
+   <td>${esc(x.c.state)}</td>
+   <td><div class="wri-cell"><span class="cnum" style="color:${b.color};font-weight:800">${s}</span><span class="wri-bar"><i style="width:${s}%;background:${b.color}"></i></span></div></td>
+   <td><span class="badge" style="background:${b.color}22;color:${b.color};border:1px solid ${b.color}66">${b.name}</span></td>
+   <td class="cnum">${fmt(w.temp,0)}°C</td>
+   <td>${esc(driverName(w))}</td></tr>`}).join('');
+}
+function renderRankingView(){
+ const c=$('featureContent');
+ c.innerHTML=`<div class="card" data-livecard>
+  <div style="display:flex;justify-content:space-between;gap:12px;flex-wrap:wrap;align-items:center;margin-bottom:10px">
+   <div><h3 style="margin:0 0 3px">Live national league table</h3>
+    <div class="sub">Rows always use the current loaded state. Click a row to make that city the context for every module.</div></div>
+   <div class="seg" role="group" aria-label="Ranking order">
+    <button type="button" data-action="rank-sort" data-sort="high" class="${S.rankSort==='high'?'on':''}">Highest risk</button>
+    <button type="button" data-action="rank-sort" data-sort="low" class="${S.rankSort==='low'?'on':''}">Lowest risk</button>
+    <button type="button" data-action="rank-sort" data-sort="alpha" class="${S.rankSort==='alpha'?'on':''}">Alphabetical</button>
+   </div>
+  </div>
+  <div style="overflow-x:auto"><table class="ranktable">
+   <thead><tr><th>Rank</th><th>City</th><th>State</th><th>WRI</th><th>Risk</th><th>Temp</th><th>Dominant driver</th></tr></thead>
+   <tbody id="rankBody"></tbody></table></div>
+  <div style="margin-top:10px">${sourceTag(weatherSourceSummary()+' + CascadeAI risk engine','CALCULATED')}</div>
+ </div>`;
+ renderRankingBody();
+}
+function updateRankingView(){renderRankingBody()}
+function updateRankingHighlight(){
+ const tb=$('rankBody');if(!tb)return;
+ tb.querySelectorAll('tr[data-city]').forEach(tr=>tr.classList.toggle('active',tr.dataset.city===S.selectedCityId));
+}
+
+/* ============================ 14. FEATURE: ROUTE ENGINE (OSRM) ============================ */
+function routeSelects(){
+ const opt=sel=>CITY_NODES.map(c=>`<option value="${c.id}"${c.id===sel?' selected':''}>${esc(c.name)} — ${esc(c.state)}</option>`).join('');
+ return `<div class="field"><label for="routeFrom">Origin</label><select id="routeFrom">${opt(S.route.from)}</select></div>
+  <button class="btn icon" type="button" data-action="route-swap" title="Swap origin and destination" aria-label="Swap origin and destination" style="height:44px">⇄</button>
+  <div class="field"><label for="routeTo">Destination</label><select id="routeTo">${opt(S.route.to)}</select></div>
+  <button class="btn primary" type="button" data-action="route-find">Find route</button>`;
+}
+function renderRouteView(){
+ const c=$('featureContent');
+ c.innerHTML=`<div class="card routebar">${routeSelects()}</div>
+  <div id="routeOut">${S.route.lastRoute?'':'<div class="card"><div class="notice">Choose any two national city nodes and press “Find route”. The geometry, distance and time come from the public OSRM service — if it cannot answer, nothing is invented.</div></div>'}</div>
+  <div class="card" style="margin-top:14px" data-livecard>
+   <div style="display:flex;justify-content:space-between;gap:12px;flex-wrap:wrap;align-items:center;margin-bottom:10px">
+    <div><h3 style="margin:0 0 3px">Route map</h3><div class="sub">Real road geometry from public OSRM. Endpoint markers carry each city's current WRI colour.</div></div>
+    <span id="routeStatus" class="sub">${S.route.lastRoute?'Restored your last route — press “Find route” for a fresh one.':'Choose two cities and press “Find route”.'}</span>
+   </div>
+   <div class="mapbox" id="routeMapBox" style="height:clamp(380px,52vh,560px)"><div class="map-loading">The route map draws here after a route is calculated.</div></div>
+   <div style="margin-top:10px">${sourceTag('OSRM public routing','MAP')}${sourceTag('Endpoint WRI','CALCULATED')}</div>
+  </div>`;
+ if(S.route.lastRoute)drawRoute(S.route.lastRoute,true);
+}
+function fmtDur(sec){const m=Math.round(sec/60);if(m<60)return m+' min';return Math.floor(m/60)+' h '+String(m%60).padStart(2,'0')+' min'}
+async function findRoute(){
+ const a=cityById(S.route.from),b=cityById(S.route.to),st=$('routeStatus'),out=$('routeOut');
+ if(!a||!b||!out)return;
+ if(a.id===b.id){if(st)st.textContent='Pick two different cities.';return}
+ const seq=++S.route.rSeq;
+ if(st)st.textContent='Contacting the public OSRM routing service…';
+ out.innerHTML='<div class="card"><div class="skel" style="height:16px;width:62%"></div><div class="skel" style="height:16px;width:40%;margin-top:8px"></div></div>';
+ try{
+  const ctrl=new AbortController(),to=setTimeout(()=>ctrl.abort(),10000);
+  const url=`https://router.project-osrm.org/route/v1/driving/${a.lon},${a.lat};${b.lon},${b.lat}?overview=full&geometries=geojson&alternatives=false&steps=false`;
+  const r=await fetch(url,{cache:'no-store',signal:ctrl.signal});clearTimeout(to);
+  if(!r.ok)throw new Error('OSRM HTTP '+r.status);
+  const d=await r.json(),rt=d&&d.routes&&d.routes[0];
+  if(!rt||!rt.geometry||!rt.geometry.coordinates)throw new Error('no route in response');
+  if(seq!==S.route.rSeq)return;
+  S.route.lastRoute={a,b,rt};
+  drawRoute(S.route.lastRoute,false);
+ }catch(e){
+  if(seq!==S.route.rSeq)return;
+  console.warn('route failed:',e&&e.message);
+  out.innerHTML='<div class="card"><div class="err">The public route service is temporarily unavailable. Nothing is invented in its place — please press “Find route” again in a moment.</div></div>';
+  if(st)st.textContent='Route service unavailable — clean retry, no fabricated routes.';
+ }
+}
+function drawRoute(x,restored){
+ const out=$('routeOut'),box=$('routeMapBox'),st=$('routeStatus');
+ if(!out||!box)return;
+ const wa=S.weather.get(x.a.id),wb=S.weather.get(x.b.id);
+ const sa=wa?Math.round(wa.comp.wri):null,sb=wb?Math.round(wb.comp.wri):null;
+ const modelled=(sa!=null&&sb!=null)?Math.round((sa+sb)/2):null,mb=modelled!=null?riskBand(modelled):null;
+ out.innerHTML=`<div class="routecards">
+  <div class="card"><div class="label">Road distance</div><div class="big">${fmt(x.rt.distance/1000,0)}<small> km</small></div><div class="sub">OSRM driving profile</div></div>
+  <div class="card"><div class="label">Estimated time</div><div class="big" style="font-size:27px">${fmtDur(x.rt.duration)}</div><div class="sub">routing estimate — not live traffic</div></div>
+  <div class="card"><div class="label">Endpoint WRI</div><div class="big" style="font-size:27px;display:flex;align-items:center;gap:9px">
+   <span style="color:${sa!=null?riskBand(sa).color:'inherit'}">${sa!=null?sa:'—'}</span><span style="color:var(--dim);font-size:15px">→</span>
+   <span style="color:${sb!=null?riskBand(sb).color:'inherit'}">${sb!=null?sb:'—'}</span></div>
+   <div class="sub">${esc(x.a.name)} → ${esc(x.b.name)} • LIVE-derived</div></div>
+  <div class="card"><div class="label">Modelled route exposure</div><div class="big" style="font-size:27px;color:${mb?mb.color:'inherit'}">${modelled!=null?modelled:'—'}</div>
+   <div class="sub">MODELLED from the two endpoints — not a live road-hazard feed</div></div>
+ </div>`;
+ (async()=>{
+  try{await ensureLeaflet()}catch(e){
+   box.innerHTML='<div class="map-loading"><div class="notice" style="margin:16px">Map libraries are unreachable — the live route summary above remains fully available.</div></div>';return}
+  try{if(LM.route)LM.route.remove()}catch(e){}
+  LM.route=null;box.innerHTML='';
+  const map=L.map('routeMapBox',{zoomControl:true,attributionControl:true,minZoom:4,maxZoom:18});
+  attachTiles(map,st);
+  LM.route=map;
+  const ll=x.rt.geometry.coordinates.map(p=>[p[1],p[0]]);
+  L.polyline(ll,{color:'#062c3b',weight:9,opacity:.65,lineCap:'round',lineJoin:'round'}).addTo(map);
+  L.polyline(ll,{color:'#2fe6c8',weight:4.5,opacity:.95,lineCap:'round',lineJoin:'round'}).addTo(map);
+  [x.a,x.b].forEach(c=>{
+   const w=S.weather.get(c.id),s=w?Math.round(w.comp.wri):0;
+   L.marker([c.lat,c.lon],{icon:cityIcon(s,true),keyboard:true,title:`${c.name} • WRI ${s}`}).addTo(map)
+    .bindPopup(`<b>${esc(c.name)}</b><br><span style="color:#8fc0c9">${esc(c.state)} • WRI ${s}</span>`);
+  });
+  try{map.fitBounds(L.latLngBounds(ll),{padding:[42,42],maxZoom:9})}catch(e){}
+  setTimeout(()=>{try{map.invalidateSize(true)}catch(e){}},220);
+ })();
+ if(st)st.textContent=`ROUTE • OSRM • ${x.a.name} → ${x.b.name}${restored?' (previous result)':''}`;
+}
+function swapRouteSelection(){
+ const a=S.route.from;S.route.from=S.route.to;S.route.to=a;
+ const f=$('routeFrom'),t=$('routeTo');
+ if(f)f.value=S.route.from;if(t)t.value=S.route.to;
+}
+function updateRouteView(){ /* endpoint WRI chips refresh with the next route draw; live cards already flash */ }
+
+/* ============================ 15. FEATURE: MITRA VOICE ============================
+   One experience only. Speech plays ONLY here and is cancelled the moment the
+   user leaves (stopVoiceHard runs on every openFeature/goHome). */
+const SUGGESTIONS=['What is the weather in Delhi?','What is Mumbai\u2019s current risk?','Compare Delhi and Mumbai.',
+ 'Which city has the highest risk?','Which cities are currently moderate risk?','What does the cascade network show?',
+ 'Show me Jaipur.','What is the temperature in Bengaluru?','Route from Delhi to Jaipur.','Is Chennai safer than Hyderabad right now?',
+ 'What is causing Delhi\u2019s risk?','What about its risk tomorrow?'];
+function renderVoiceView(){
+ const c=$('featureContent');
+ if(!S.chat.length)S.chat.push({role:'bot',text:'I am Mitra, the CascadeAI copilot. I answer from the live national state — no scripted demos, no fabricated values.\nAsk me about any of the 57 city nodes: weather, risk, comparisons, hotspots, causes or routes.'});
+ const micOK=('webkitSpeechRecognition' in window)||('SpeechRecognition' in window);
+ c.innerHTML=`<div class="grid voicegrid">
+  <div class="card">
+   <div class="chatlog" id="chatLog" aria-live="polite" aria-label="Conversation with Mitra"></div>
+   <div class="chips">${SUGGESTIONS.map(q=>`<button class="chipbtn" type="button" data-action="ask" data-ask="${esc(q)}">${esc(q)}</button>`).join('')}</div>
+   <div class="chatcontrols">
+    <button class="micbtn" id="micBtn" type="button" data-action="voice-mic" aria-label="Microphone input" title="Voice input via browser speech recognition">🎙️</button>
+    <input id="chatInput" class="chat-input" placeholder="Ask Mitra anything about the live national state…" aria-label="Type your question for Mitra"/>
+    <button class="btn primary" type="button" data-action="voice-send">Send</button>
+   </div>
+  </div>
+  <div class="card">
+   <h3>Voice output</h3>
+   <div style="display:flex;align-items:center;gap:12px;margin-bottom:8px">
+    <label class="switch"><input type="checkbox" id="speakToggle" ${S.voice.speak?'checked':''} aria-label="Speak responses aloud"/><i></i></label>
+    <div><b style="font-size:13px">Speak responses aloud</b><div class="sub">Off by default. Speech plays only while this workspace is open and stops instantly when you leave.</div></div>
+   </div>
+   <div class="mrow"><span class="sub">Speech state</span><b class="speakdot" id="speakState">idle</b></div>
+   <div class="mrow"><span class="sub">Microphone</span><b id="micState">${micOK?'available in this browser':'text-only (no recognition API)'}</b></div>
+   <h3 class="mt">Mitra live context</h3>
+   <div id="voiceContext"></div>
+   <div class="good mt">No API keys and no cloud LLM. Mitra answers from the live CascadeAI state, the city registry and the risk engine running in this page.</div>
+   ${sourceTag('Local intent engine + live site state','CALCULATED')}
+  </div>
+ </div>`;
+ renderChat();updateVoiceContext();
+}
+function renderChat(){
+ const log=$('chatLog');if(!log)return;
+ log.innerHTML=S.chat.map(m=>`<div class="msg ${m.role}${m.sys?' sys':''}">${esc(m.text)}${m.prov?`<span class="provenance">${esc(m.prov)}</span>`:''}</div>`).join('');
+ log.scrollTop=log.scrollHeight;
+}
+function updateVoiceContext(){
+ const e=$('voiceContext');if(!e)return;
+ const c=selectedCity(),w=selectedWeather();
+ e.innerHTML=mrow('Selected city',`${esc(c.name)}, ${esc(c.state)}`)+
+  mrow('Live cities',`${S.weather.size} / ${CITY_NODES.length}`)+
+  (w?mrow('Selected WRI',`${Math.round(w.comp.wri)} · ${riskBand(w.comp.wri).name}`):mrow('Selected WRI','awaiting sync'));
+}
+function addSys(text){S.chat.push({role:'bot',sys:true,text});renderChat()}
+function normText(s){return ' '+String(s).toLowerCase().replace(/[^a-z0-9]+/g,' ')+' '}
+function citiesFromText(q){
+ const t=normText(q),hits=[];
+ for(const c of CITY_NODES){
+  const n=c.name.toLowerCase();
+  if(t.includes(' '+n+' '))hits.push({c,i:t.indexOf(' '+n+' ')});
+ }
+ for(const alias of Object.keys(CITY_ALIASES)){
+  if(t.includes(' '+alias+' ')){
+   const c=cityById(CITY_ALIASES[alias]);
+   if(c&&!hits.some(h=>h.c.id===c.id))hits.push({c,i:t.indexOf(' '+alias+' ')});
+  }
+ }
+ return hits.sort((a,b)=>a.i-b.i).map(h=>h.c);
+}
+function speak(text){
+ if(!S.voice.speak||S.activeFeature!=='voice')return;
+ if(!('speechSynthesis' in window))return;
+ try{
+  window.speechSynthesis.cancel();
+  const u=new SpeechSynthesisUtterance(String(text).replace(/[•►◀●→]/g,' ').replace(/\s+/g,' ').trim());
+  const vs=window.speechSynthesis.getVoices()||[];
+  const v=vs.find(x=>/^en([-_]IN)?/i.test(x.lang))||vs.find(x=>/^en/i.test(x.lang));
+  if(v)u.voice=v;
+  u.lang=(v&&v.lang)||'en-IN';u.rate=1.04;u.pitch=1;
+  const sd=$('speakState');
+  if(sd){sd.textContent='speaking';sd.classList.add('on')}
+  u.onend=u.onerror=()=>{const s=$('speakState');if(s){s.textContent='idle';s.classList.remove('on')}};
+  window.speechSynthesis.speak(u);
+ }catch(e){console.warn('speech failed:',e&&e.message)}
+}
+function toggleMic(){
+ const SR=window.SpeechRecognition||window.webkitSpeechRecognition;
+ if(!SR){addSys('This browser does not expose speech recognition. Text chat always works — try a suggestion chip below.');return}
+ if(S.voice.listening){try{if(S.voice.recognizer)S.voice.recognizer.stop()}catch(e){}return}
+ try{
+  const r=new SR();S.voice.recognizer=r;
+  r.lang='en-IN';r.interimResults=true;r.maxAlternatives=1;
+  r.onstart=()=>{S.voice.listening=true;const b=$('micBtn');if(b)b.classList.add('rec');const m=$('micState');if(m)m.textContent='listening…'};
+  r.onresult=e=>{let txt='';for(let i=0;i<e.results.length;i++)txt+=e.results[i][0].transcript;
+   const inp=$('chatInput');if(inp)inp.value=txt};
+  r.onend=()=>{S.voice.listening=false;const b=$('micBtn');if(b)b.classList.remove('rec');const m=$('micState');if(m)m.textContent='available in this browser';
+   const inp=$('chatInput');if(inp&&inp.value.trim())sendChat()};
+  r.onerror=ev=>{S.voice.listening=false;const b=$('micBtn');if(b)b.classList.remove('rec');const m=$('micState');if(m)m.textContent='available in this browser';
+   if(ev&&ev.error==='not-allowed')addSys('Microphone permission was denied. Text chat still works perfectly.');
+   else if(ev&&ev.error!=='aborted'&&ev&&ev.error!=='no-speech')addSys('The microphone did not capture that. Text chat still works perfectly.');};
+  r.start();
+ }catch(e){console.warn('mic failed:',e&&e.message);addSys('The microphone could not start in this browser. Text chat still works.')}
+}
+function sendChat(prefill){
+ const inp=$('chatInput');
+ const text=(typeof prefill==='string')?prefill:(inp?inp.value:'');
+ if(!text.trim())return;
+ if(inp)inp.value='';
+ S.chat.push({role:'user',text:text.trim()});
+ renderChat();
+ handleAnswer(text.trim());
+}
+async function handleAnswer(q){
+ const res=await answerQuery(q);
+ const msg={role:'bot',text:res.text,prov:res.prov||''};
+ S.chat.push(msg);renderChat();
+ if(res.route)await runRouteAnswer(res.route,msg);
+ else speak(res.text);
+}
+async function runRouteAnswer(route,msg){
+ S.route.from=route.a.id;S.route.to=route.b.id;
+ try{
+  const ctrl=new AbortController(),to=setTimeout(()=>ctrl.abort(),9000);
+  const url=`https://router.project-osrm.org/route/v1/driving/${route.a.lon},${route.a.lat};${route.b.lon},${route.b.lat}?overview=false`;
+  const r=await fetch(url,{cache:'no-store',signal:ctrl.signal});clearTimeout(to);
+  if(!r.ok)throw new Error('OSRM '+r.status);
+  const d=await r.json(),rt=d&&d.routes&&d.routes[0];
+  if(!rt)throw new Error('no route');
+  msg.text=`The live OSRM road route from ${route.a.name} to ${route.b.name} is about ${fmt(rt.distance/1000,0)} km, with an estimated driving time of ${fmtDur(rt.duration)}.\nThe Route Engine is pre-filled — open it to see the full geometry on the map.`;
+  msg.prov='ROUTING • OSRM • live public service';
+ }catch(e){
+  msg.text=`The public route service did not respond, so I will not invent a distance. I have pre-filled the Route Engine with ${route.a.name} → ${route.b.name}; open it and press “Find route” to try again.`;
+ }
+ renderChat();speak(msg.text);
+}
+async function answerQuery(q){
+ const t=normText(q),found=citiesFromText(q);
+ if(found.length){
+  S.lastCityMentioned=found[found.length-1].id;
+  found.forEach(c=>{if(S.lastCities[S.lastCities.length-1]!==c.id){S.lastCities.push(c.id);if(S.lastCities.length>4)S.lastCities.shift()}});
+ }
+ const hasPron=/\b(its|it|there|that city|same|the city)\b/.test(t);
+ const ctx=cityById(S.lastCityMentioned)||selectedCity();
+ const city=found.length?found[found.length-1]:ctx;
+ const w4=id=>S.weather.get(id);
+ const PROV='LIVE • multi-provider weather · CALCULATED • CascadeAI WRI';
+ const all=()=>CITY_NODES.map(c=>({c,w:S.weather.get(c.id)})).filter(x=>x.w);
+ if(/^(hi|hello|hey|namaste|good (morning|afternoon|evening))\b/.test(t.trim())||/\b(help|what can you do|capabilities)\b/.test(t)){
+  return{text:`I am Mitra. I answer from CascadeAI's live national state across ${CITY_NODES.length} city nodes.\nTry: “weather in Mumbai”, “compare Delhi and Chennai”, “which cities are moderate risk”, “what is causing Delhi's risk”, or “route from Delhi to Jaipur”.`,prov:'GROUNDED • live site state'};
+ }
+ if(/\b(national|india wide|nationwide|overview|summary|briefing|status|pulse|situation)\b/.test(t)&&!found.length){
+  const arr=all();
+  if(!arr.length)return{text:'The national feed is still connecting — ask me again in a few seconds.',prov:'LIVE • connecting'};
+  const sorted=[...arr].sort((a,b)=>b.w.comp.wri-a.w.comp.wri);
+  const avg=Math.round(arr.reduce((s,x)=>s+x.w.comp.wri,0)/arr.length);
+  const counts=BANDS.map(b=>`${arr.filter(x=>riskBand(x.w.comp.wri).name===b.name).length} ${b.name.toLowerCase()}`).join(', ');
+  return{text:`National snapshot across ${arr.length} live city nodes:\n• Highest risk: ${sorted[0].c.name} (${Math.round(sorted[0].w.comp.wri)}, ${riskBand(sorted[0].w.comp.wri).name})\n• Lowest risk: ${sorted[sorted.length-1].c.name} (${Math.round(sorted[sorted.length-1].w.comp.wri)})\n• National average WRI: ${avg}\n• Band distribution: ${counts}.\nThe cascade network and ranking pages show this visually.`,prov:PROV};
+ }
+ if(/\b(highest|worst|riskiest|most (at )?risk)\b/.test(t)&&/\b(risk|wri|city|cities)\b/.test(t)){
+  const arr=all();
+  if(!arr.length)return{text:'The national feed is still connecting — ask me again shortly.',prov:'LIVE • connecting'};
+  const sorted=[...arr].sort((a,b)=>b.w.comp.wri-a.w.comp.wri);
+  return{text:`Highest calculated risk right now:\n${sorted.slice(0,3).map((x,i)=>`${i+1}. ${x.c.name}, ${x.c.state} — WRI ${Math.round(x.w.comp.wri)} (${riskBand(x.w.comp.wri).name})`).join('\n')}\nMain driver in ${sorted[0].c.name}: ${driverName(sorted[0].w).toLowerCase()}.`,prov:PROV};
+ }
+ if(/\b(lowest|safest|least risk|calmest|best)\b/.test(t)){
+  const arr=all();
+  if(!arr.length)return{text:'The national feed is still connecting — ask me again shortly.',prov:'LIVE • connecting'};
+  const sorted=[...arr].sort((a,b)=>a.w.comp.wri-b.w.comp.wri);
+  return{text:`The lowest calculated risk right now is ${sorted[0].c.name}, ${sorted[0].c.state} — WRI ${Math.round(sorted[0].w.comp.wri)} (${riskBand(sorted[0].w.comp.wri).name}).\nOther calm nodes: ${sorted.slice(1,4).map(x=>`${x.c.name} (${Math.round(x.w.comp.wri)})`).join(', ')}.`,prov:PROV};
+ }
+ const bm=t.match(/\b(moderate|high|severe|low|elevated)\b/);
+ if(bm&&/\b(cities|list|which|show|how many|are there)\b/.test(t)){
+  const arr=all();
+  if(!arr.length)return{text:'The national feed is still connecting — ask me again shortly.',prov:'LIVE • connecting'};
+  const bandName=bm[1].toUpperCase()==='ELEVATED'?'HIGH':bm[1].toUpperCase();
+  const band=BANDS.find(b=>b.name===bandName);
+  const list=arr.filter(x=>riskBand(x.w.comp.wri).name===bandName);
+  const scope=`currently in the ${bandName} band (WRI ${band.max===25?'0–25':band.max===50?'26–50':band.max===75?'51–75':'76–100'})`;
+  if(!list.length)return{text:`No city is ${scope} right now.`,prov:PROV};
+  return{text:`${list.length} ${list.length===1?'city is':'cities are'} ${scope}:\n${list.slice(0,12).map(x=>`• ${x.c.name}, ${x.c.state} — WRI ${Math.round(x.w.comp.wri)}`).join('\n')}${list.length>12?`\n…and ${list.length-12} more.`:''}`,prov:PROV};
+ }
+ const pair=found.length>=2?[found[0],found[1]]:
+  (/\b(them|both|those|the two)\b/.test(t)&&S.lastCities.length>=2?S.lastCities.slice(-2).map(cityById):null);
+ if(pair&&pair[0]&&pair[1]&&/\b(compare|versus|vs|safer|riskier|better|difference|than|between)\b/.test(t)){
+  const a=pair[0],b=pair[1],wa=w4(a.id),wb=w4(b.id);
+  if(!wa||!wb)return{text:`I know both ${a.name} and ${b.name}, but one of their live packets is still loading. Try again in a few seconds.`,prov:'LIVE • connecting'};
+  const va=Math.round(wa.comp.wri),vb=Math.round(wb.comp.wri);
+  const verdict=va===vb?'They are level right now':(va<vb?`${a.name} is currently safer`:`${b.name} is currently safer`);
+  return{text:`${a.name}: ${fmt(wa.temp,0)}°C, ${weatherText(wa.code).toLowerCase()}, WRI ${va} (${riskBand(va).name}), driver ${driverName(wa).toLowerCase()}.\n${b.name}: ${fmt(wb.temp,0)}°C, ${weatherText(wb.code).toLowerCase()}, WRI ${vb} (${riskBand(vb).name}), driver ${driverName(wb).toLowerCase()}.\n→ ${verdict} (WRI ${Math.min(va,vb)} vs ${Math.max(va,vb)}).`,prov:PROV};
+ }
+ if(/\b(route|drive|driving|travel|how far|distance|road)\b/.test(t)&&found.length>=2){
+  return{text:`Checking the public OSRM road route from ${found[0].name} to ${found[1].name}…`,route:{a:found[0],b:found[1]}};
+ }
+ if(/\b(cascade|network|spiral|connection|linked|link)\b/.test(t)){
+  const arr=all();
+  if(!arr.length)return{text:'The national network is still connecting. Open the Cascade Network page in a few seconds to see the full spiral.',prov:'MODELLED • connecting'};
+  const sorted=[...arr].sort((a,b)=>b.w.comp.wri-a.w.comp.wri);
+  return{text:`The cascade spiral currently links ${arr.length} live nodes with ${CASC.edges.length} modelled relationships — same-state pairs plus nearest geographic neighbours.\nHottest nodes right now: ${sorted.slice(0,3).map(x=>`${x.c.name} (${Math.round(x.w.comp.wri)})`).join(', ')}.\nRemember: the links are MODELLED exposure relationships for monitoring, not observed failures.`,prov:'MODELLED • CascadeAI network'};
+ }
+ if(/\b(forecast|tomorrow|tonight|later|outlook|trend|next hours|hours ahead)\b/.test(t)){
+  const w=w4(city.id);
+  if(!w)return{text:`I know ${city.name}, but its live packet is still loading.`,prov:'LIVE • connecting'};
+  const sN=hourlySeries(city.id,1),sT=hourlySeries(city.id,2);
+  const useTomorrow=/\btomorrow\b/.test(t)&&sT.length>=4;
+  const win=useTomorrow?sT:sN;
+  const avg=Math.round(win.reduce((a,p)=>a+p.wri,0)/win.length);
+  const peak=win.reduce((a,p)=>p.wri>a.wri?p:a,win[0]);
+  const maxRain=Math.max(...win.map(p=>Number.isFinite(p.precipProb)?p.precipProb:0));
+  return{text:`Calculated risk trend for ${city.name} (${useTomorrow?'the same clock hours tomorrow':'the next 10 hours'}):\n• Average WRI ${avg} (${riskBand(avg).name})\n• Peak WRI ${Math.round(peak.wri)} around ${hhmm(peak.time)} IST\n• Max precipitation probability ${Math.round(maxRain)}%\nThe City Risk Graph draws this hour by hour.`,prov:'LIVE • provider forecast · CALCULATED • WRI'};
+ }
+ if(/\b(why|cause|causing|reason|driver of)\b/.test(t)){
+  const w=w4(city.id);
+  if(!w)return{text:`I know ${city.name}, but its live packet is still loading.`,prov:'LIVE • connecting'};
+  return{text:`What is driving ${city.name}'s risk right now:\n${explainRisk(w).map(s=>'• '+s).join('\n')}`,prov:'CALCULATED • CascadeAI risk engine'};
+ }
+ if(found.length===1&&/\b(show|open|go to|select|switch|jump|take|about|tell)\b/.test(t)){
+  const w=w4(city.id);
+  setCity(city.id);
+  if(!w)return{text:`${city.name}, ${city.state} is now the selected city. Its live packet arrives with the next national sync.`,prov:'GROUNDED • site state'};
+  const b=riskBand(w.comp.wri);
+  return{text:`${city.name}, ${city.state} is now the selected city across the whole platform.\nSnapshot: ${fmt(w.temp,0)}°C, ${weatherText(w.code).toLowerCase()}, WRI ${Math.round(w.comp.wri)} (${b.name}), main driver ${driverName(w).toLowerCase()}.`,prov:PROV};
+ }
+ const w=w4(city.id);
+ if(!found.length&&!/\b(weather|temperature|temp|rain|humidity|wind|risk|wri|hot|cold|fog|safe)\b/.test(t)){
+  return{text:`I did not catch a city there. I can answer about any of the ${CITY_NODES.length} nodes — try “What is the temperature in Bengaluru?” or “Which city has the highest risk?”.`,prov:'GROUNDED • live site state'};
+ }
+ if(!w)return{text:`I know ${city.name}, but its live weather packet is still loading — I never fabricate values. Ask again in a few seconds.`,prov:'LIVE • connecting'};
+ if(/\b(rain|precip|drizzle|shower)\b/.test(t))return{text:`${city.name}: current precipitation ${fmt(w.precip,1)} mm with ${fmt(w.precipProb,0)}% probability this hour. WRI ${Math.round(w.comp.wri)} (${riskBand(w.comp.wri).name}).`,prov:PROV};
+ if(/\b(wind|gust|breeze)\b/.test(t))return{text:`${city.name}: wind ${fmt(w.wind,0)} km/h with gusts to ${fmt(w.gust,0)} km/h. WRI ${Math.round(w.comp.wri)}.`,prov:PROV};
+ if(/\b(humidity|muggy|sticky)\b/.test(t))return{text:`${city.name}: relative humidity ${fmt(w.rh,0)}% with ${weatherText(w.code).toLowerCase()} conditions.`,prov:PROV};
+ if(/\b(temperature|temp|hot|cold|warm|cool)\b/.test(t))return{text:`${city.name}: ${fmt(w.temp,0)}°C right now, feeling like ${fmt(w.apparent,0)}°C. ${weatherText(w.code)}. WRI ${Math.round(w.comp.wri)} (${riskBand(w.comp.wri).name}).`,prov:PROV};
+ if(/\b(risk|wri|danger|safe|unsafe)\b/.test(t))return{text:`${city.name} currently scores WRI ${Math.round(w.comp.wri)} — ${riskBand(w.comp.wri).name} band. The largest factor is ${driverName(w).toLowerCase()}. This is a calculated index from live weather, not an official warning.`,prov:PROV};
+ const b=riskBand(w.comp.wri);
+ return{text:`${city.name}, ${city.state}: ${fmt(w.temp,0)}°C (feels ${fmt(w.apparent,0)}°C), ${weatherText(w.code).toLowerCase()}, humidity ${fmt(w.rh,0)}%, wind ${fmt(w.wind,0)} km/h.\nCalculated WRI ${Math.round(w.comp.wri)} — ${b.name} band, dominant driver ${driverName(w).toLowerCase()}.`,prov:PROV};
+}
+
+/* ============================ 16. INIT ============================ */
+async function init(){
+ wireGlobalEvents();
+ document.addEventListener('keydown',e=>{ /* keyboard activation for SVG nodes + table rows */
+  if((e.key==='Enter'||e.key===' ')&&e.target&&e.target.closest&&e.target.closest('[data-action]')
+    &&!/^(BUTTON|INPUT|SELECT|TEXTAREA|A)$/.test(e.target.tagName)){
+   e.preventDefault();
+   e.target.closest('[data-action]').dispatchEvent(new MouseEvent('click',{bubbles:true}));
+  }
+ });
+ const cachedCount=await readWeatherCache();
+ updateHeader();updateHome();
+ startScheduler();
+ if(cachedCount>0&&S.weather.size){
+  setLiveStatus(S.stale?'Showing saved weather — waiting for live refresh':'Saved weather restored — checking for updates',S.stale?'stale':'');
+ }else setLiveStatus('Connecting to live weather network…','busy');
+ refreshNow();
+ if('speechSynthesis' in window)window.speechSynthesis.getVoices(); /* warm the voice list */
+}
+if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',init);else init();
+/* Lightweight surface for demos, automation and support diagnostics. */
+window.CascadeAI={state:S,cities:CITY_NODES,setCity,refreshNow,openFeature,goHome,maps:LM,ask:q=>sendChat(q),selfTest:runSelfTest,version:'11.5-GH3'};
+</script>
+</body>
+</html>
